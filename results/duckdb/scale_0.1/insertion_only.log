@@ -1,0 +1,22 @@
+init done
+step   5%  ok  q1=12 q2=12 q3=11 q4=11
+step  10%  ok  q1=114 q2=114 q3=75 q4=75
+step  15%  ok  q1=483 q2=483 q3=200 q4=200
+step  20%  ok  q1=1269 q2=1269 q3=432 q4=432
+step  25%  ok  q1=2956 q2=2956 q3=766 q4=766
+step  30%  ok  q1=5727 q2=5727 q3=1188 q4=1188
+step  35%  ok  q1=9665 q2=9665 q3=1649 q4=1649
+step  40%  ok  q1=15465 q2=15465 q3=2221 q4=2221
+step  45%  ok  q1=24477 q2=24477 q3=2910 q4=2910
+step  50%  ok  q1=36361 q2=36361 q3=3643 q4=3643
+step  55%  ok  q1=52519 q2=52519 q3=4446 q4=4446
+step  60%  ok  q1=72386 q2=72386 q3=5337 q4=5337
+step  65%  ok  q1=96832 q2=96832 q3=6243 q4=6243
+step  70%  ok  q1=127874 q2=127874 q3=7248 q4=7248
+step  75%  ok  q1=165163 q2=165163 q3=8353 q4=8353
+step  80%  ok  q1=213336 q2=213336 q3=9505 q4=9505
+step  85%  ok  q1=263065 q2=263065 q3=10686 q4=10686
+step  90%  ok  q1=329098 q2=329098 q3=11996 q4=11996
+step  95%  ok  q1=403564 q2=403564 q3=13357 q4=13357
+step 100%  ok  q1=489972 q2=489972 q3=14800 q4=14800
+final multiset comparisons: dtl_recompute_vs_logical_views=0, dtl_recompute_vs_ivm=0, dtl_recompute_vs_crown=0, sum_recompute_vs_logical_views=0, sum_recompute_vs_ivm=0, sum_recompute_vs_crown=0, fact_ivm_vs_crown=0

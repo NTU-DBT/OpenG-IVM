@@ -1,7 +1,7 @@
-# Data and results are produced by the user, not committed
+# Data is produced by the user, not committed (regenerate with the recorded seed)
 /data/
-/results/
 /.scratch/
+# results/ IS committed (experiment outputs; see results/REPRODUCE.md).
 # The portable generated_sql/<engine>/*.sql (with __DATA_ROOT__/__SCALE__
 # tokens) IS committed. Local absolute renders (gen_sql.py --absolute) go in
 # per-scale subdirs and are not committed:
