@@ -1705,7 +1705,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|5';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|5';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|5';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|5';
 SET search_path = exp_ins, public;
@@ -1957,7 +2240,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|5';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|5';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|5';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|5';
 SET search_path = exp_ins, public;
@@ -2212,7 +2731,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|5';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|5';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|5';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|5';
 SET search_path = exp_ins, public;
@@ -2273,7 +3031,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|5';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|5';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|5';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|5';
 SET search_path = exp_ins, public;
@@ -2669,7 +3472,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|10';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|10';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|10';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|10';
 SET search_path = exp_ins, public;
@@ -2921,7 +4007,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|10';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|10';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|10';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|10';
 SET search_path = exp_ins, public;
@@ -3176,7 +4498,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|10';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|10';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|10';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|10';
 SET search_path = exp_ins, public;
@@ -3237,7 +4798,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|10';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|10';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|10';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|10';
 SET search_path = exp_ins, public;
@@ -3633,7 +5239,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|15';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|15';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|15';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|15';
 SET search_path = exp_ins, public;
@@ -3885,7 +5774,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|15';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|15';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|15';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|15';
 SET search_path = exp_ins, public;
@@ -4140,7 +6265,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|15';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|15';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|15';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|15';
 SET search_path = exp_ins, public;
@@ -4201,7 +6565,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|15';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|15';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|15';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|15';
 SET search_path = exp_ins, public;
@@ -4597,7 +7006,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|20';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|20';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|20';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|20';
 SET search_path = exp_ins, public;
@@ -4849,7 +7541,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|20';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|20';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|20';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|20';
 SET search_path = exp_ins, public;
@@ -5104,7 +8032,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|20';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|20';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|20';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|20';
 SET search_path = exp_ins, public;
@@ -5165,7 +8332,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|20';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|20';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|20';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|20';
 SET search_path = exp_ins, public;
@@ -5561,7 +8773,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|25';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|25';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|25';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|25';
 SET search_path = exp_ins, public;
@@ -5813,7 +9308,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|25';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|25';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|25';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|25';
 SET search_path = exp_ins, public;
@@ -6068,7 +9799,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|25';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|25';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|25';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|25';
 SET search_path = exp_ins, public;
@@ -6129,7 +10099,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|25';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|25';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|25';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|25';
 SET search_path = exp_ins, public;
@@ -6525,7 +10540,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|30';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|30';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|30';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|30';
 SET search_path = exp_ins, public;
@@ -6777,7 +11075,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|30';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|30';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|30';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|30';
 SET search_path = exp_ins, public;
@@ -7032,7 +11566,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|30';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|30';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|30';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|30';
 SET search_path = exp_ins, public;
@@ -7093,7 +11866,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|30';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|30';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|30';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|30';
 SET search_path = exp_ins, public;
@@ -7489,7 +12307,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|35';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|35';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|35';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|35';
 SET search_path = exp_ins, public;
@@ -7741,7 +12842,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|35';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|35';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|35';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|35';
 SET search_path = exp_ins, public;
@@ -7996,7 +13333,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|35';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|35';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|35';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|35';
 SET search_path = exp_ins, public;
@@ -8057,7 +13633,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|35';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|35';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|35';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|35';
 SET search_path = exp_ins, public;
@@ -8453,7 +14074,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|40';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|40';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|40';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|40';
 SET search_path = exp_ins, public;
@@ -8705,7 +14609,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|40';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|40';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|40';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|40';
 SET search_path = exp_ins, public;
@@ -8960,7 +15100,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|40';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|40';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|40';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|40';
 SET search_path = exp_ins, public;
@@ -9021,7 +15400,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|40';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|40';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|40';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|40';
 SET search_path = exp_ins, public;
@@ -9417,7 +15841,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|45';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|45';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|45';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|45';
 SET search_path = exp_ins, public;
@@ -9669,7 +16376,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|45';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|45';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|45';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|45';
 SET search_path = exp_ins, public;
@@ -9924,7 +16867,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|45';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|45';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|45';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|45';
 SET search_path = exp_ins, public;
@@ -9985,7 +17167,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|45';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|45';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|45';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|45';
 SET search_path = exp_ins, public;
@@ -10381,7 +17608,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|50';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|50';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|50';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|50';
 SET search_path = exp_ins, public;
@@ -10633,7 +18143,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|50';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|50';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|50';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|50';
 SET search_path = exp_ins, public;
@@ -10888,7 +18634,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|50';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|50';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|50';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|50';
 SET search_path = exp_ins, public;
@@ -10949,7 +18934,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|50';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|50';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|50';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|50';
 SET search_path = exp_ins, public;
@@ -11345,7 +19375,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|55';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|55';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|55';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|55';
 SET search_path = exp_ins, public;
@@ -11597,7 +19910,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|55';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|55';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|55';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|55';
 SET search_path = exp_ins, public;
@@ -11852,7 +20401,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|55';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|55';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|55';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|55';
 SET search_path = exp_ins, public;
@@ -11913,7 +20701,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|55';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|55';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|55';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|55';
 SET search_path = exp_ins, public;
@@ -12309,7 +21142,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|60';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|60';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|60';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|60';
 SET search_path = exp_ins, public;
@@ -12561,7 +21677,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|60';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|60';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|60';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|60';
 SET search_path = exp_ins, public;
@@ -12816,7 +22168,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|60';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|60';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|60';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|60';
 SET search_path = exp_ins, public;
@@ -12877,7 +22468,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|60';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|60';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|60';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|60';
 SET search_path = exp_ins, public;
@@ -13273,7 +22909,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|65';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|65';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|65';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|65';
 SET search_path = exp_ins, public;
@@ -13525,7 +23444,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|65';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|65';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|65';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|65';
 SET search_path = exp_ins, public;
@@ -13780,7 +23935,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|65';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|65';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|65';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|65';
 SET search_path = exp_ins, public;
@@ -13841,7 +24235,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|65';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|65';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|65';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|65';
 SET search_path = exp_ins, public;
@@ -14237,7 +24676,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|70';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|70';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|70';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|70';
 SET search_path = exp_ins, public;
@@ -14489,7 +25211,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|70';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|70';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|70';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|70';
 SET search_path = exp_ins, public;
@@ -14744,7 +25702,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|70';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|70';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|70';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|70';
 SET search_path = exp_ins, public;
@@ -14805,7 +26002,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|70';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|70';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|70';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|70';
 SET search_path = exp_ins, public;
@@ -15201,7 +26443,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|75';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|75';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|75';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|75';
 SET search_path = exp_ins, public;
@@ -15453,7 +26978,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|75';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|75';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|75';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|75';
 SET search_path = exp_ins, public;
@@ -15708,7 +27469,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|75';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|75';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|75';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|75';
 SET search_path = exp_ins, public;
@@ -15769,7 +27769,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|75';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|75';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|75';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|75';
 SET search_path = exp_ins, public;
@@ -16165,7 +28210,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|80';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|80';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|80';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|80';
 SET search_path = exp_ins, public;
@@ -16417,7 +28745,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|80';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|80';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|80';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|80';
 SET search_path = exp_ins, public;
@@ -16672,7 +29236,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|80';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|80';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|80';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|80';
 SET search_path = exp_ins, public;
@@ -16733,7 +29536,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|80';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|80';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|80';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|80';
 SET search_path = exp_ins, public;
@@ -17129,7 +29977,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|85';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|85';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|85';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|85';
 SET search_path = exp_ins, public;
@@ -17381,7 +30512,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|85';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|85';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|85';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|85';
 SET search_path = exp_ins, public;
@@ -17636,7 +31003,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|85';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|85';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|85';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|85';
 SET search_path = exp_ins, public;
@@ -17697,7 +31303,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|85';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|85';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|85';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|85';
 SET search_path = exp_ins, public;
@@ -18093,7 +31744,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|90';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|90';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|90';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|90';
 SET search_path = exp_ins, public;
@@ -18345,7 +32279,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|90';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|90';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|90';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|90';
 SET search_path = exp_ins, public;
@@ -18600,7 +32770,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|90';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|90';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|90';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|90';
 SET search_path = exp_ins, public;
@@ -18661,7 +33070,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|90';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|90';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|90';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|90';
 SET search_path = exp_ins, public;
@@ -19057,7 +33511,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|95';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|95';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|95';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|95';
 SET search_path = exp_ins, public;
@@ -19309,7 +34046,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|95';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|95';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|95';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|95';
 SET search_path = exp_ins, public;
@@ -19564,7 +34537,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|95';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|95';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|95';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|95';
 SET search_path = exp_ins, public;
@@ -19625,7 +34837,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|95';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|95';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|95';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|95';
 SET search_path = exp_ins, public;
@@ -20021,7 +35278,290 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q1|100';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q1|100';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: first detail INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q1|100';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q1|100';
 SET search_path = exp_ins, public;
@@ -20273,7 +35813,243 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q2|100';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q2|100';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.dtl_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: second detail INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_rc fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q2|100';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q2|100';
 SET search_path = exp_ins, public;
@@ -20528,7 +36304,246 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q3|100';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q3|100';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: third summary INSERT...SELECT
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+WITH tmp_zx_send_countersign_t AS (
+    SELECT
+        ccci.application_code,
+        ccci.approve_date,
+        ccci.status,
+        ccci.invoice_no,
+        ccci.send_date,
+        ccci.office_receive_date,
+        ccci.customer_receive_date,
+        ccci.tax_invoice_date,
+        '1' as type
+    FROM exp_ins.cfs_cinv_customer_invoice_t ccci
+    WHERE ccci.status >= 3
+    UNION ALL
+    SELECT
+        cici.application_code,
+        cici.approve_date,
+        cici.status,
+        cici.tax_invoice_no AS invoice_no,
+        cici.send_date,
+        NULL AS office_receive_date,
+        NULL AS customer_receive_date,
+        NULL AS tax_invoice_date,
+        '2' as type
+    FROM exp_ins.cfs_inv_invoice_info_t cici
+    WHERE cici.status IN (30, 40)
+),
+apt AS (
+    SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+    FROM tmp_zx_send_countersign_t
+    WHERE type = '1'
+    GROUP BY application_code
+),
+tmp_cfs_opt_application_inst_t AS (
+    SELECT
+        opii.application_inst_id,
+        oa.operator_application_id,
+        oa.application_code,
+        oa.salesperson_id,
+        oa.company_id,
+        oa.customer_id,
+        opii.contract_id,
+        oa.currency_id,
+        oa.total_amount,
+        oa.creation_date,
+        oa.applicant_time,
+        oa.logical_is_deleted,
+        GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+        oa.work_flow_id,
+        oa.application_type,
+        oa.status,
+        GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+        opii.payment_unit_id,
+        pu.payment_unit_number,
+        apt_t.tax_invoice_date
+    FROM exp_ins.cfs_opt_application_t oa
+    JOIN exp_ins.cfs_opt_application_inst_t opii
+        ON oa.operator_application_id = opii.operator_application_id
+    LEFT JOIN exp_ins.cfs_con_payment_unit_t pu
+        ON opii.payment_unit_id = pu.payment_unit_id
+    LEFT JOIN apt apt_t
+        ON oa.application_code = apt_t.application_code
+    WHERE oa.application_type = 1
+      AND oa.status IN (30, 40, 50)
+      AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00'
+),
+approval_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        oa.applicant_time AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        node.node_define_name_cn AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+    LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+    LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+    WHERE oa.status = 30
+),
+send_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        temp.approve_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        mes.message AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT t.application_code, MAX(t.approve_date) AS approve_date
+        FROM tmp_zx_send_countersign_t t WHERE t.status = 30
+        GROUP BY t.application_code
+    ) temp ON temp.application_code = oa.application_code
+    LEFT JOIN exp_ins.tpl_fd_message_t mes
+        ON mes.app_name = 'cfs' AND mes.language = 'zh_CN'
+        AND mes.message_key = 'cfs.html.label.role.operatorInvoiceSender'
+    WHERE oa.status = 40
+),
+countersign_temp AS (
+    SELECT
+        oa.application_inst_id AS id,
+        CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+        oa.application_code,
+        CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+        CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+        oa.operator_application_id AS business_id,
+        '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+        -999 AS invoice_type_id,
+        oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+        CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+        oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+        oa.currency_id, oa.total_amount, oa.creation_date,
+        tic.send_date AS submit_date, oa.applicant_time,
+        CAST(NULL AS BIGINT) AS current_handler_id,
+        '结束' AS currentrole,
+        CAST(NULL AS BIGINT) AS todo_billing_id,
+        CAST(NULL AS BIGINT) AS payment_unit_id,
+        CAST(NULL AS VARCHAR) AS source_code,
+        CAST(NULL AS VARCHAR) AS details_flag,
+        CAST(NULL AS VARCHAR) AS billing_status,
+        oa.logical_is_deleted,
+        oa.cdc_last_update_date,
+        oa.logical_is_deleted_del,
+        oa.tax_invoice_date,
+        oa.payment_unit_number
+    FROM tmp_cfs_opt_application_inst_t oa
+    JOIN (
+        SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+        FROM tmp_zx_send_countersign_t ccci
+        WHERE ccci.status >= 40
+          AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL)
+    ) tic ON tic.application_code = oa.application_code
+    WHERE oa.status = 50
+),
+fact_t AS (
+    SELECT * FROM approval_temp
+    UNION ALL
+    SELECT * FROM send_temp
+    UNION ALL
+    SELECT * FROM countersign_temp
+)
+
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_rc t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM (SELECT * FROM approval_temp UNION ALL SELECT * FROM send_temp UNION ALL SELECT * FROM countersign_temp) fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q3|100';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q3|100';
 SET search_path = exp_ins, public;
@@ -20589,7 +36604,52 @@ SELECT '@@JOB5@@|E|insertion_only|query|recompute|q4|100';
 SELECT '@@JOB5@@|B|insertion_only|count|recompute|q4|100';
 SET search_path = exp_ins, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_ins.sum_rc;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql
+-- SOURCE_OBJECT: fourth summary INSERT...SELECT (tombstone)
+-- METHOD: recompute
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; wrapped in COUNT/MINMAX/export; CTE recompute chain; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_rc t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_rc
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|recompute|q4|100';
 SELECT '@@JOB5@@|B|insertion_only|minmax|recompute|q4|100';
 SET search_path = exp_ins, public;

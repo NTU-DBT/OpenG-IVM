@@ -97,7 +97,7 @@ def gen_duckdb(scale, scenarios, methods, out_dir):
                     for q in QUERIES:
                         tbl = dtl if q in ("q1", "q2") else sm
                         _region(f, scenario, "query", method, q, sp_, R.build_query_insert(method, q, dtl, sm))
-                        _region(f, scenario, "count", method, q, sp_, R.count_sql(tbl))
+                        _region(f, scenario, "count", method, q, sp_, R.count_form_sql(method, q, dtl, sm))
                         _region(f, scenario, "minmax", method, q, sp_, R.minmax_sql(tbl, q in ("q1", "q2")))
             written.append(path)
     return written
@@ -170,7 +170,7 @@ def gen_opengauss(scale, scenarios, methods, out_dir, schema_prefix):
                     for q in QUERIES:
                         tbl = dtl if q in ("q1", "q2") else sm
                         _region(f, scenario, "query", method, q, sp_, R.build_query(schema, method, q, dtl, sm))
-                        _region(f, scenario, "count", method, q, sp_, R.build_count_query(schema, tbl))
+                        _region(f, scenario, "count", method, q, sp_, R.count_form_sql(schema, method, q, dtl, sm))
                         _region(f, scenario, "minmax", method, q, sp_,
                                 R.build_minmax_query(schema, tbl, q in ("q1", "q2")))
             written.append(path)

@@ -1930,7 +1930,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|5';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|5';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|5';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|5';
 SET search_path = exp_sw, public;
@@ -1998,7 +2026,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|5';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|5';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|5';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|5';
 SET search_path = exp_sw, public;
@@ -2069,7 +2103,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|5';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|5';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|5';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|5';
 SET search_path = exp_sw, public;
@@ -2130,7 +2176,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|5';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|5';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|5';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|5';
 SET search_path = exp_sw, public;
@@ -2514,7 +2605,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|10';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|10';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|10';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|10';
 SET search_path = exp_sw, public;
@@ -2582,7 +2701,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|10';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|10';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|10';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|10';
 SET search_path = exp_sw, public;
@@ -2653,7 +2778,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|10';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|10';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|10';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|10';
 SET search_path = exp_sw, public;
@@ -2714,7 +2851,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|10';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|10';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|10';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|10';
 SET search_path = exp_sw, public;
@@ -3169,7 +3351,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|15';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|15';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|15';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|15';
 SET search_path = exp_sw, public;
@@ -3237,7 +3447,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|15';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|15';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|15';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|15';
 SET search_path = exp_sw, public;
@@ -3308,7 +3524,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|15';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|15';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|15';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|15';
 SET search_path = exp_sw, public;
@@ -3369,7 +3597,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|15';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|15';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|15';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|15';
 SET search_path = exp_sw, public;
@@ -3824,7 +4097,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|20';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|20';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|20';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|20';
 SET search_path = exp_sw, public;
@@ -3892,7 +4193,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|20';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|20';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|20';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|20';
 SET search_path = exp_sw, public;
@@ -3963,7 +4270,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|20';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|20';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|20';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|20';
 SET search_path = exp_sw, public;
@@ -4024,7 +4343,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|20';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|20';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|20';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|20';
 SET search_path = exp_sw, public;
@@ -4479,7 +4843,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|25';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|25';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|25';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|25';
 SET search_path = exp_sw, public;
@@ -4547,7 +4939,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|25';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|25';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|25';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|25';
 SET search_path = exp_sw, public;
@@ -4618,7 +5016,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|25';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|25';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|25';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|25';
 SET search_path = exp_sw, public;
@@ -4679,7 +5089,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|25';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|25';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|25';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|25';
 SET search_path = exp_sw, public;
@@ -5134,7 +5589,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|30';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|30';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|30';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|30';
 SET search_path = exp_sw, public;
@@ -5202,7 +5685,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|30';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|30';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|30';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|30';
 SET search_path = exp_sw, public;
@@ -5273,7 +5762,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|30';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|30';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|30';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|30';
 SET search_path = exp_sw, public;
@@ -5334,7 +5835,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|30';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|30';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|30';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|30';
 SET search_path = exp_sw, public;
@@ -5789,7 +6335,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|35';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|35';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|35';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|35';
 SET search_path = exp_sw, public;
@@ -5857,7 +6431,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|35';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|35';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|35';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|35';
 SET search_path = exp_sw, public;
@@ -5928,7 +6508,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|35';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|35';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|35';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|35';
 SET search_path = exp_sw, public;
@@ -5989,7 +6581,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|35';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|35';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|35';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|35';
 SET search_path = exp_sw, public;
@@ -6444,7 +7081,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|40';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|40';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|40';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|40';
 SET search_path = exp_sw, public;
@@ -6512,7 +7177,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|40';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|40';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|40';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|40';
 SET search_path = exp_sw, public;
@@ -6583,7 +7254,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|40';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|40';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|40';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|40';
 SET search_path = exp_sw, public;
@@ -6644,7 +7327,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|40';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|40';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|40';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|40';
 SET search_path = exp_sw, public;
@@ -7099,7 +7827,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|45';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|45';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|45';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|45';
 SET search_path = exp_sw, public;
@@ -7167,7 +7923,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|45';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|45';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|45';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|45';
 SET search_path = exp_sw, public;
@@ -7238,7 +8000,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|45';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|45';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|45';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|45';
 SET search_path = exp_sw, public;
@@ -7299,7 +8073,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|45';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|45';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|45';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|45';
 SET search_path = exp_sw, public;
@@ -7754,7 +8573,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|50';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|50';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|50';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|50';
 SET search_path = exp_sw, public;
@@ -7822,7 +8669,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|50';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|50';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|50';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|50';
 SET search_path = exp_sw, public;
@@ -7893,7 +8746,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|50';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|50';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|50';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|50';
 SET search_path = exp_sw, public;
@@ -7954,7 +8819,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|50';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|50';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|50';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|50';
 SET search_path = exp_sw, public;
@@ -8409,7 +9319,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|55';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|55';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|55';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|55';
 SET search_path = exp_sw, public;
@@ -8477,7 +9415,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|55';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|55';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|55';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|55';
 SET search_path = exp_sw, public;
@@ -8548,7 +9492,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|55';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|55';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|55';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|55';
 SET search_path = exp_sw, public;
@@ -8609,7 +9565,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|55';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|55';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|55';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|55';
 SET search_path = exp_sw, public;
@@ -9064,7 +10065,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|60';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|60';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|60';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|60';
 SET search_path = exp_sw, public;
@@ -9132,7 +10161,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|60';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|60';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|60';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|60';
 SET search_path = exp_sw, public;
@@ -9203,7 +10238,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|60';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|60';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|60';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|60';
 SET search_path = exp_sw, public;
@@ -9264,7 +10311,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|60';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|60';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|60';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|60';
 SET search_path = exp_sw, public;
@@ -9719,7 +10811,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|65';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|65';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|65';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|65';
 SET search_path = exp_sw, public;
@@ -9787,7 +10907,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|65';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|65';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|65';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|65';
 SET search_path = exp_sw, public;
@@ -9858,7 +10984,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|65';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|65';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|65';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|65';
 SET search_path = exp_sw, public;
@@ -9919,7 +11057,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|65';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|65';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|65';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|65';
 SET search_path = exp_sw, public;
@@ -10374,7 +11557,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|70';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|70';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|70';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|70';
 SET search_path = exp_sw, public;
@@ -10442,7 +11653,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|70';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|70';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|70';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|70';
 SET search_path = exp_sw, public;
@@ -10513,7 +11730,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|70';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|70';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|70';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|70';
 SET search_path = exp_sw, public;
@@ -10574,7 +11803,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|70';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|70';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|70';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|70';
 SET search_path = exp_sw, public;
@@ -11029,7 +12303,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|75';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|75';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|75';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|75';
 SET search_path = exp_sw, public;
@@ -11097,7 +12399,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|75';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|75';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|75';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|75';
 SET search_path = exp_sw, public;
@@ -11168,7 +12476,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|75';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|75';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|75';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|75';
 SET search_path = exp_sw, public;
@@ -11229,7 +12549,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|75';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|75';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|75';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|75';
 SET search_path = exp_sw, public;
@@ -11684,7 +13049,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|80';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|80';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|80';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|80';
 SET search_path = exp_sw, public;
@@ -11752,7 +13145,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|80';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|80';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|80';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|80';
 SET search_path = exp_sw, public;
@@ -11823,7 +13222,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|80';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|80';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|80';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|80';
 SET search_path = exp_sw, public;
@@ -11884,7 +13295,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|80';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|80';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|80';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|80';
 SET search_path = exp_sw, public;
@@ -12339,7 +13795,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|85';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|85';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|85';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|85';
 SET search_path = exp_sw, public;
@@ -12407,7 +13891,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|85';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|85';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|85';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|85';
 SET search_path = exp_sw, public;
@@ -12478,7 +13968,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|85';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|85';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|85';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|85';
 SET search_path = exp_sw, public;
@@ -12539,7 +14041,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|85';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|85';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|85';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|85';
 SET search_path = exp_sw, public;
@@ -12994,7 +14541,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|90';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|90';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|90';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|90';
 SET search_path = exp_sw, public;
@@ -13062,7 +14637,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|90';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|90';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|90';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|90';
 SET search_path = exp_sw, public;
@@ -13133,7 +14714,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|90';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|90';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|90';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|90';
 SET search_path = exp_sw, public;
@@ -13194,7 +14787,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|90';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|90';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|90';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|90';
 SET search_path = exp_sw, public;
@@ -13649,7 +15287,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|95';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|95';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|95';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|95';
 SET search_path = exp_sw, public;
@@ -13717,7 +15383,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|95';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|95';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|95';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|95';
 SET search_path = exp_sw, public;
@@ -13788,7 +15460,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|95';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|95';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|95';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|95';
 SET search_path = exp_sw, public;
@@ -13849,7 +15533,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|95';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|95';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|95';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|95';
 SET search_path = exp_sw, public;
@@ -14304,7 +16033,35 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q1|100';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q1|100';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q1|100';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q1|100';
 SET search_path = exp_sw, public;
@@ -14372,7 +16129,13 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q2|100';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q2|100';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.dtl_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND greatest(oa.logical_is_deleted, opii.logical_is_deleted) = false AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q2|100';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q2|100';
 SET search_path = exp_sw, public;
@@ -14443,7 +16206,19 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q3|100';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q3|100';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL '30 minute' FROM dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q3|100';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q3|100';
 SET search_path = exp_sw, public;
@@ -14504,7 +16279,52 @@ SELECT '@@JOB5@@|E|sliding_window|query|crown|q4|100';
 SELECT '@@JOB5@@|B|sliding_window|count|crown|q4|100';
 SET search_path = exp_sw, public;
 SET query_dop = 32;
-SELECT COUNT(*) FROM exp_sw.sum_cw;
+SET enable_nestloop = off;
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_sw.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_sw.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|sliding_window|count|crown|q4|100';
 SELECT '@@JOB5@@|B|sliding_window|minmax|crown|q4|100';
 SET search_path = exp_sw, public;

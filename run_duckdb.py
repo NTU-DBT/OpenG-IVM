@@ -247,6 +247,26 @@ def maintain_sql(method, step_start, insert_tag):
     return ""
 
 
+def count_form_sql(method, qname, dtl_table, sum_table):
+    """The count FORM of query qname (SELECT COUNT(*) of the current result).
+    crown computes q1/q2/q3 by aggregating partial counts (no full join); the
+    others count their view/table result directly. Output-table refs (q2/q3/q4)
+    are rebound to this method's targets."""
+    if method == "crown" and qname in ("q1", "q2", "q3"):
+        return crown_maintain.crown_count_sql("duckdb", qname, dtl_table)
+    if method == "recompute":
+        sql = strip_comments(read_sql(f"sql/duckdb/recompute/{qname}_count.sql"))
+    else:
+        sql = strip_comments(read_sql(f"sql/duckdb/query/{qname}_count.sql"))
+        suffix = {"logical_views": "_lv", "ivm": "_mv", "crown": "_cw"}[method]
+        if suffix != "_mv":
+            for v in MV_NAMES:
+                sql = sql.replace(v, v.replace("_mv", suffix))
+    sql = sql.replace("s000_dwt_hws_iao.dwd_billing_in_transit_dtl_t_05", dtl_table)
+    sql = sql.replace("s000_dwt_hws_iao.dwd_billing_in_transit_t_05", sum_table)
+    return sql
+
+
 def count_sql(table):
     return f"SELECT COUNT(*) FROM {table};"
 
@@ -326,6 +346,7 @@ def run_scenario(scenario):
             timed(con, metrics, scenario, step_pct, "base_delete", "", "", base_delete_sql())
 
         step_res = {}
+        cf_res = {}
         for method in METHODS:
             # fence deferred storage work so each method's timings are its own
             timed(con, metrics, scenario, step_pct, "checkpoint", method, "", "CHECKPOINT;")
@@ -335,14 +356,32 @@ def run_scenario(scenario):
                       maintain_sql(method, pstep["step_start"], pstep["insert_tag"]))
             for qname in ["q1", "q2", "q3", "q4"]:
                 tbl = dtl if qname in ("q1", "q2") else sm
+                # accumulate INSERT: build the output tables (feeds q2/q3/q4)
                 timed(con, metrics, scenario, step_pct, "query", method, qname,
                       build_query_insert(method, qname, dtl, sm))
                 cnt = con.execute(count_sql(tbl)).fetchone()[0]
                 mm = con.execute(minmax_sql(tbl, qname in ("q1", "q2"))).fetchone()
                 step_res[(method, qname)] = (cnt, mm)
+                # count form: the current-result count. crown computes it by
+                # aggregating partial counts (no full-join materialize); the
+                # others count their view/table result the naive way.
+                t0 = time.perf_counter()
+                cf = con.execute(count_form_sql(method, qname, dtl, sm)).fetchone()[0]
+                metrics.append(dict(scenario=scenario, step=step_pct, phase="count_query",
+                                    method=method, qname=qname,
+                                    seconds=round(time.perf_counter() - t0, 4)))
+                cf_res[(method, qname)] = cf
 
         step_ok = True
         for qname in ["q1", "q2", "q3", "q4"]:
+            cref = cf_res[("recompute", qname)]
+            for m in ("logical_views", "ivm", "crown"):
+                if cf_res[(m, qname)] != cref:
+                    step_ok = False
+                    mismatch_total += 1
+                    checks.append(dict(scenario=scenario,
+                                       check=f"step{step_pct}_{qname}_countform_recompute_vs_{m}",
+                                       mismatches=1, detail=f"{cref} != {cf_res[(m, qname)]}"))
             ref = step_res[("recompute", qname)]
             for m in ("logical_views", "ivm", "crown"):
                 if step_res[(m, qname)] != ref:

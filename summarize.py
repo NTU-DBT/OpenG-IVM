@@ -68,21 +68,35 @@ for sc in scenarios:
             agg[(m["method"], "maintain")] += m["seconds"]
         elif m["phase"] == "query":
             agg[(m["method"], m["qname"])] += m["seconds"]
+        elif m["phase"] == "count_query":
+            agg[(m["method"], "cf_" + m["qname"])] += m["seconds"]
 
+    per = lambda v: v / n if n else 0
+    w("Accumulate-INSERT cost (builds the detail/summary output tables):\n")
     w("| method | maintain/step | q1 | q2 | q3 | q4 | queries/step | maintain+queries/step |")
     w("|---|---|---|---|---|---|---|---|")
     for meth in METHODS:
         mt = agg[(meth, "maintain")]
         qs = [agg[(meth, q)] for q in Q]
         qt = sum(qs)
-        per = lambda v: v / n if n else 0
         w(f"| {meth} | {per(mt):.3f} | " + " | ".join(f"{per(x):.3f}" for x in qs) +
           f" | {per(qt):.3f} | {per(mt + qt):.3f} |")
 
+    if any(m["phase"] == "count_query" for m in ms):
+        w("\nCount-form cost (COUNT of the current result; crown aggregates "
+          "partial counts instead of materializing the join):\n")
+        w("| method | cf_q1 | cf_q2 | cf_q3 | cf_q4 | count-form/step |")
+        w("|---|---|---|---|---|---|")
+        for meth in METHODS:
+            cfs = [agg[(meth, "cf_" + q)] for q in Q]
+            w(f"| {meth} | " + " | ".join(f"{per(x):.3f}" for x in cfs) +
+              f" | {per(sum(cfs)):.3f} |")
+
+    w("")
     for meth in ("ivm", "crown"):
-        per = sorted(m["seconds"] for m in ms if m["phase"] == "maintain" and m["method"] == meth)
-        if per:
-            w(f"- {meth} maintain per step: min {per[0]:.3f}s, median {per[len(per)//2]:.3f}s, max {per[-1]:.3f}s")
+        pl = sorted(m["seconds"] for m in ms if m["phase"] == "maintain" and m["method"] == meth)
+        if pl:
+            w(f"- {meth} maintain per step: min {pl[0]:.3f}s, median {pl[len(pl)//2]:.3f}s, max {pl[-1]:.3f}s")
 
 print("\n".join(out))
 (res_dir / "report.md").write_text("\n".join(out) + "\n", encoding="utf-8")

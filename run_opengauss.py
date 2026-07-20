@@ -297,6 +297,25 @@ def build_ivm_maintain(schema, step_start, insert_tag, del_start=None, del_tag=N
     return sp(schema) + body
 
 
+def count_form_sql(schema, method, qname, dtl, sm):
+    """Count FORM of query qname. crown computes q1/q2/q3 by aggregating partial
+    counts (no full join); others count their view/table result directly."""
+    if method == "crown" and qname in ("q1", "q2", "q3"):
+        return qsp(schema) + crown_maintain.crown_count_sql("opengauss", qname, dtl)
+    if method == "recompute":
+        sql = read_sql(f"sql/opengauss/recompute/{qname}_count.sql")
+    else:
+        sql = read_sql(f"sql/opengauss/query/{qname}_count.sql")
+        suffix = {"logical_views": "_lv", "ivm": "_mv", "crown": "_cw"}[method]
+        if suffix != "_mv":
+            for v in MV_NAMES:
+                sql = sql.replace(v, v.replace("_mv", suffix))
+    sql = rebind(sql, schema)
+    sql = sql.replace(f"{schema}.dwd_billing_in_transit_dtl_t_05", f"{schema}.{dtl}")
+    sql = sql.replace(f"{schema}.dwd_billing_in_transit_t_05", f"{schema}.{sm}")
+    return qsp(schema) + sql
+
+
 def build_count_query(schema, table):
     return sp(schema) + f"SELECT COUNT(*) FROM {schema}.{table};"
 
@@ -428,6 +447,7 @@ def run_scenario(scenario):
             ms, _ = gsql_timed(analyze_sql(schema, an), "analyze/first"); emit(step_pct, "analyze", "", "", ms)
 
         step_res = {}
+        cf_res = {}
         for method in METHODS:
             dtl, sm = TARGET[method]["dtl"], TARGET[method]["sum"]
             if method == "ivm":
@@ -443,12 +463,18 @@ def run_scenario(scenario):
                 if step_idx == 0 and scenario != "preloaded_replacement_sliding":
                     ms, _ = gsql_timed(analyze_sql(schema, CROWN_TABLES), "analyze/crown"); emit(step_pct, "analyze", "crown", "", ms)
             for qname in ["q1", "q2", "q3", "q4"]:
+                # accumulate INSERT: build the output tables (feeds q2/q3/q4)
                 ms, _ = gsql_timed(build_query(schema, method, qname, dtl, sm), f"{method}/{qname}")
                 emit(step_pct, "query", method, qname, ms)
                 tbl = dtl if qname in ("q1", "q2") else sm
                 _, cr = gsql_fetch(build_count_query(schema, tbl), f"{method}/{qname}/c")
                 _, mr = gsql_fetch(build_minmax_query(schema, tbl, qname in ("q1", "q2")), f"{method}/{qname}/m")
                 step_res[(method, qname)] = (cr[0][0] if cr else "", mr[0] if mr else ())
+                # count form: crown aggregates partial counts (no full join);
+                # others count their view/table result directly
+                cms, cfr = gsql_fetch(count_form_sql(schema, method, qname, dtl, sm), f"{method}/{qname}/cf")
+                emit(step_pct, "count_query", method, qname, cms)
+                cf_res[(method, qname)] = cfr[0][0] if cfr else ""
 
         if step_idx == 0:
             tgt = [a["dtl"] for a in TARGET.values()] + [a["sum"] for a in TARGET.values()]
@@ -456,6 +482,14 @@ def run_scenario(scenario):
 
         step_ok = True
         for qname in ["q1", "q2", "q3", "q4"]:
+            cref = cf_res[("recompute", qname)]
+            for m in ("logical_views", "ivm", "crown"):
+                if cf_res[(m, qname)] != cref:
+                    step_ok = False
+                    mismatch_total += 1
+                    checks.append(dict(scenario=scenario,
+                                       check=f"step{step_pct}_{qname}_countform_recompute_vs_{m}",
+                                       mismatches=1, detail=f"{cref} != {cf_res[(m, qname)]}"))
             ref = step_res[("recompute", qname)]
             for m in ("logical_views", "ivm", "crown"):
                 if step_res[(m, qname)] != ref:

@@ -2875,7 +2875,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|5';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|5';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -2934,7 +2961,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|5';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|5';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -2993,7 +3025,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|5';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|5';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3042,7 +3085,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|5';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|5';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3389,7 +3471,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|10';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|10';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -3448,7 +3557,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|10';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|10';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -3507,7 +3621,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|10';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|10';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3556,7 +3681,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|10';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|10';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3903,7 +4067,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|15';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|15';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -3962,7 +4153,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|15';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|15';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -4021,7 +4217,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|15';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|15';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -4070,7 +4277,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|15';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|15';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -4417,7 +4663,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|20';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|20';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -4476,7 +4749,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|20';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|20';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -4535,7 +4813,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|20';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|20';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -4584,7 +4873,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|20';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|20';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -4931,7 +5259,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|25';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|25';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -4990,7 +5345,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|25';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|25';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -5049,7 +5409,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|25';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|25';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5098,7 +5469,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|25';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|25';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5445,7 +5855,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|30';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|30';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -5504,7 +5941,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|30';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|30';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -5563,7 +6005,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|30';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|30';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5612,7 +6065,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|30';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|30';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5959,7 +6451,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|35';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|35';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -6018,7 +6537,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|35';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|35';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -6077,7 +6601,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|35';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|35';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6126,7 +6661,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|35';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|35';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6473,7 +7047,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|40';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|40';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -6532,7 +7133,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|40';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|40';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -6591,7 +7197,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|40';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|40';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6640,7 +7257,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|40';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|40';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6987,7 +7643,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|45';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|45';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -7046,7 +7729,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|45';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|45';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -7105,7 +7793,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|45';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|45';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -7154,7 +7853,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|45';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|45';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -7501,7 +8239,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|50';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|50';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -7560,7 +8325,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|50';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|50';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -7619,7 +8389,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|50';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|50';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -7668,7 +8449,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|50';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|50';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8015,7 +8835,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|55';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|55';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -8074,7 +8921,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|55';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|55';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -8133,7 +8985,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|55';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|55';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8182,7 +9045,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|55';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|55';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8529,7 +9431,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|60';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|60';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -8588,7 +9517,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|60';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|60';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -8647,7 +9581,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|60';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|60';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8696,7 +9641,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|60';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|60';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9043,7 +10027,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|65';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|65';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -9102,7 +10113,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|65';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|65';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -9161,7 +10177,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|65';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|65';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9210,7 +10237,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|65';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|65';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9557,7 +10623,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|70';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|70';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -9616,7 +10709,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|70';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|70';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -9675,7 +10773,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|70';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|70';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9724,7 +10833,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|70';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|70';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10071,7 +11219,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|75';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|75';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -10130,7 +11305,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|75';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|75';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -10189,7 +11369,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|75';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|75';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10238,7 +11429,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|75';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|75';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10585,7 +11815,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|80';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|80';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -10644,7 +11901,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|80';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|80';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -10703,7 +11965,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|80';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|80';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10752,7 +12025,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|80';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|80';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -11099,7 +12411,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|85';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|85';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -11158,7 +12497,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|85';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|85';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -11217,7 +12561,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|85';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|85';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -11266,7 +12621,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|85';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|85';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -11613,7 +13007,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|90';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|90';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -11672,7 +13093,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|90';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|90';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -11731,7 +13157,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|90';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|90';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -11780,7 +13217,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|90';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|90';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12127,7 +13603,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|95';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|95';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -12186,7 +13689,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|95';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|95';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -12245,7 +13753,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|95';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|95';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12294,7 +13813,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|95';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|95';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12641,7 +14199,34 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q1|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q1|100';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN s000_cqrs_cfs.cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM s000_dwt_hws_iao.cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+  AND opii.contract_id IN (SELECT contract_id FROM s000_dwt_hws_iao.cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q1|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q1|100';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -12700,7 +14285,12 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q2|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q2|100';
-SELECT COUNT(*) FROM dtl_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM dtl_cw fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 30 AND oa.flag_opii AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS (SELECT 1 FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND NOT (GREATEST(CAST(oa.logical_is_deleted AS INTEGER),CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN) AND opii.application_inst_id = fact_t.id))
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q2|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q2|100';
 SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM dtl_cw;
@@ -12759,7 +14349,18 @@ GROUP BY t.head_id, t.logical_is_deleted
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q3|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q3|100';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM dtl_cw t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q3|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q3|100';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12808,7 +14409,46 @@ WHERE t1.del_flag = 0
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|crown|q4|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|crown|q4|100';
-SELECT COUNT(*) FROM sum_cw;
+SELECT COUNT(*) AS cnt FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|crown|q4|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|crown|q4|100';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;

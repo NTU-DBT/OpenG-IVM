@@ -4,7 +4,10 @@ One self-contained, timed SQL script per method × scenario, for each engine —
 produced by `../gen_sql.py`. Each script runs a single method end-to-end for
 one scenario (schema + tables + static/preload, the method's persistent
 objects, then the 20 update steps with the four q1–q4 queries), with
-`@@JOB5@@|B|…` / `@@JOB5@@|E|…` markers around every timed region.
+`@@JOB5@@|B|…` / `@@JOB5@@|E|…` markers around every timed region. Each step
+has, per query, a `query` region (accumulate INSERT that builds the output), a
+`count` region (the count FORM — the crown method aggregates maintained partial
+counts instead of materializing the join), and a `minmax` region.
 
 ```
 duckdb/    <scenario>__<method>.sql   (recompute | logical_views | ivm | crown)

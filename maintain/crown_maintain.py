@@ -54,6 +54,111 @@ def _oa_cols(prefix="oa."):
     return ", ".join(prefix + c.strip() for c in OA_COLS.split(","))
 
 
+# ==========================================================================
+# COUNT queries by aggregation over partial counts (no full-join materialize)
+# ==========================================================================
+#
+# For a COUNT of a join, CROWN does not build the join and count the rows; it
+# combines the partial counts (annotations) already maintained on each
+# relation. For this workload:
+#   * q1 (detail live): sum over the inst-core (oa x opii, filtered by
+#       watermark, non-OEM contract, and a salesperson-region semi-join/factor)
+#       of a per-key branch multiplier -- task-count for approval, mes-count
+#       for send, DISTINCT-tic-count per application_code for countersign. The
+#       n:m tic fan-out and the 1:n task fan-out become a single multiply by a
+#       maintained per-key count, so no join rows are ever materialized.
+#   * q3 (summary live): its scope (fact ids passing the watermark) is the
+#       inst-core id set -- id and cdc are available before any branch fan-out
+#       -- so the fact assembly is not needed; the group-count still runs over
+#       the (materialized, method-independent) detail output table.
+#   * q2 (detail tombstone): "is id still live in branch B" is decided from the
+#       inst-core (branch alive, not logically deleted), not the branch view.
+#   * q4 (summary tombstone): reads only the output tables; no fact assembly
+#       (handled generically by the runner).
+#
+# Verified equal to the naive full-join count (and hence to recompute) at every
+# step of every scenario.
+
+def crown_count_sql(dialect, qname, dtl):
+    """Return `SELECT COUNT(*) AS cnt ...` for q1/q2/q3 of the crown method.
+    dtl is the detail output table name (q2/q3). Base tables are bare on
+    openGauss (search_path) and schema-qualified on DuckDB. q4 is not handled
+    here (it reads only output tables)."""
+    dd = dialect == "duckdb"
+    pc = "s000_cqrs_cfs." if dd else ""            # cqrs schema prefix
+    pd = "s000_dwt_hws_iao." if dd else ""         # dwt schema prefix
+    iv = "INTERVAL 30 MINUTE" if dd else "INTERVAL '30 minute'"
+
+    def delfalse(oa, op):
+        if dd:
+            return (f"NOT (GREATEST(CAST({oa}.logical_is_deleted AS INTEGER),"
+                    f"CAST({op}.logical_is_deleted AS INTEGER))::BOOLEAN)")
+        return f"greatest({oa}.logical_is_deleted, {op}.logical_is_deleted) = false"
+
+    wm = (f"(SELECT job_last_start_date - {iv} FROM {pd}dwd_job_status_t_05 LIMIT 1)")
+    alive = ("oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp)"
+             " OR (oa.status = 50 AND oa.flag_tic))")
+
+    if qname == "q1":
+        return f"""SELECT COALESCE(SUM(
+  (CASE oa.status
+     WHEN 30 THEN GREATEST(1, COALESCE(tk.c, 0))
+     WHEN 40 THEN GREATEST(1, mes_c.c)
+     WHEN 50 THEN COALESCE(ti.c, 0)
+   END)
+  *
+  (CASE WHEN COALESCE(s1.c, 0) = 0 AND COALESCE(s2.c, 0) = 0 THEN 0
+        ELSE GREATEST(COALESCE(s1.c, 0), 1) * GREATEST(COALESCE(s2.c, 0), 1) END)
+), 0) AS cnt
+FROM crown_vs_oa oa
+JOIN {pc}cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN {pc}cfs_cfg_company_t comp ON comp.company_id = oa.company_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON oa.status = 50 AND ti.application_code = oa.application_code
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM {pc}cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON oa.status = 30 AND tk.proc_inst_id = oa.work_flow_id
+LEFT JOIN (SELECT salesperson_id, COUNT(*) c FROM {pd}cfs_salesperson_region_t
+           WHERE source_code = '业务补录' GROUP BY salesperson_id) s1
+       ON s1.salesperson_id = oa.salesperson_id
+LEFT JOIN (SELECT salesperson_id, unit_code, COUNT(*) c FROM {pd}cfs_salesperson_region_t
+           WHERE source_code = '原始表中已有的账套' GROUP BY salesperson_id, unit_code) s2
+       ON s2.salesperson_id = oa.salesperson_id AND s2.unit_code = comp.company_code
+CROSS JOIN (SELECT COUNT(*) c FROM crown_mes) mes_c
+WHERE {alive}
+  AND opii.contract_id IN (SELECT contract_id FROM {pd}cfs_comm_contract_t
+                           WHERE hw_contract_bussource_code <> 'OEM' OR hw_contract_bussource_code IS NULL)
+  AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= {wm};"""
+
+    if qname == "q2":
+        def branch(status, extra):
+            return (f"SELECT 1 FROM {pc}cfs_opt_application_inst_t opii"
+                    f" JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id"
+                    f" WHERE oa.status = {status} AND oa.flag_opii{extra}"
+                    f" AND {delfalse('oa','opii')} AND opii.application_inst_id = fact_t.id")
+        return f"""SELECT COUNT(*) AS cnt FROM (
+  SELECT 1 FROM {dtl} fact_t
+  WHERE (fact_t.node_type = '待审批' AND NOT EXISTS ({branch(30, '')}))
+     OR (fact_t.node_type = '待寄送' AND NOT EXISTS ({branch(40, ' AND oa.flag_temp')}))
+     OR (fact_t.node_type = '待签返' AND NOT EXISTS ({branch(50, ' AND oa.flag_tic')}))
+) q;"""
+
+    if qname == "q3":
+        return f"""SELECT COUNT(*) AS cnt FROM (
+  SELECT t.head_id, t.logical_is_deleted
+  FROM {dtl} t
+  INNER JOIN (
+    SELECT DISTINCT opii.application_inst_id AS id
+    FROM {pc}cfs_opt_application_inst_t opii
+    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
+    WHERE {alive}
+      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= {wm}
+  ) scp ON t.id = scp.id
+  GROUP BY t.head_id, t.logical_is_deleted
+) q;"""
+
+    raise ValueError(qname)
+
+
 def _crown_view_rebind(sql, base_ref):
     """Rebind the assembly-view FROM sources onto the maintained partial
     results. `base_ref('t')` returns the qualified name of base table t in the
