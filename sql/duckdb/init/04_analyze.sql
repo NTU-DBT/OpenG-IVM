@@ -1,0 +1,4 @@
+-- SOURCE_FILE: analyze_normal.sql
+-- TRANSFORMATIONS: DuckDB ANALYZE
+
+ANALYZE;

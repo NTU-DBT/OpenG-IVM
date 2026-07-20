@@ -1,0 +1,13235 @@
+-- openGauss | scenario=insertion_only | method=crown | scale=__SCALE__ | schema=exp_ins
+\timing on
+DROP SCHEMA IF EXISTS exp_ins CASCADE;
+SELECT '@@JOB5@@|B|insertion_only|init_base|crown||0';
+CREATE SCHEMA IF NOT EXISTS exp_ins;
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+-- SOURCE_FILE: create_table_ddl.sql
+-- TRANSFORMATIONS: dialect adaptation for openGauss
+
+-- skip: CREATE SCHEMA IF NOT EXISTS s000_cqrs_cfs;
+-- skip: CREATE SCHEMA IF NOT EXISTS s000_dwt_hws_iao;
+
+SET search_path = exp_ins, public;
+
+CREATE TABLE exp_ins.cfs_cfg_company_t (
+  company_id BIGINT,
+  company_abbr VARCHAR,
+  company_address VARCHAR,
+  company_name_zh VARCHAR,
+  company_address_zh VARCHAR,
+  company_code VARCHAR,
+  detail VARCHAR,
+  integrate_invoice_flag VARCHAR,
+  integrate_receipt_flag VARCHAR,
+  exchange_flag VARCHAR,
+  fax VARCHAR,
+  fax_area VARCHAR,
+  enable_flag VARCHAR,
+  global_flag VARCHAR,
+  internal_flag VARCHAR,
+  tax_invoice_active VARCHAR,
+  memo_line_id BIGINT,
+  company_name VARCHAR,
+  orgid BIGINT,
+  remark VARCHAR,
+  sign_flag VARCHAR,
+  sob_id BIGINT,
+  tel VARCHAR,
+  tel_area VARCHAR,
+  use_flag INTEGER,
+  currency_id BIGINT,
+  exchange_type INTEGER,
+  invoice_account_type VARCHAR,
+  schedule_tax_flag VARCHAR,
+  version INTEGER,
+  source VARCHAR,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_update_date TIMESTAMP,
+  last_updated_by BIGINT,
+  description VARCHAR,
+  dm_memo_line_id BIGINT,
+  short_name VARCHAR,
+  ou_name VARCHAR,
+  organization_id BIGINT,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_cinv_customer_invoice_t (
+  customer_invoice_id BIGINT,
+  sys_invoice_no VARCHAR,
+  invoice_book_no VARCHAR,
+  china_invoice_type_id BIGINT,
+  erp_transaction_id BIGINT,
+  sign_no VARCHAR,
+  sign_no_created_by BIGINT,
+  sign_no_creation_date TIMESTAMP,
+  invoice_no VARCHAR,
+  issue_date TIMESTAMP,
+  invoice_to_tax_no VARCHAR,
+  accounting_tax_flag INTEGER,
+  company_id BIGINT,
+  salesperson_id BIGINT,
+  status INTEGER,
+  china_cti_id BIGINT,
+  reference_no VARCHAR,
+  export_status VARCHAR,
+  applicant_id BIGINT,
+  template_id BIGINT,
+  approver_id BIGINT,
+  sender_id BIGINT,
+  sign_id BIGINT,
+  apply_date TIMESTAMP,
+  approve_date TIMESTAMP,
+  send_date TIMESTAMP,
+  sign_date TIMESTAMP,
+  acceptance_contact_person_id BIGINT,
+  customer_receive_person VARCHAR,
+  customer_receive_date TIMESTAMP,
+  apply_sys_time TIMESTAMP,
+  approve_sys_time TIMESTAMP,
+  send_sys_time TIMESTAMP,
+  sign_sys_time TIMESTAMP,
+  vat_amount DECIMAL(22,4),
+  total_amount DECIMAL(22,4),
+  credit_amount DECIMAL(22,4),
+  applied_amount DECIMAL(22,4),
+  net_amount DECIMAL(22,4),
+  matched_amount DECIMAL(22,4),
+  balance DECIMAL(22,4),
+  contract_billed_amount DECIMAL(22,4),
+  china_tax_rate DECIMAL(38,18),
+  currency_id BIGINT,
+  customer_id BIGINT,
+  sign_flag VARCHAR,
+  reject_reason VARCHAR,
+  feedback_info VARCHAR,
+  workflow_id BIGINT,
+  manager_id BIGINT,
+  account_id BIGINT,
+  approve_remark VARCHAR,
+  manager_accredit_no VARCHAR,
+  remark VARCHAR,
+  account_accredit_no VARCHAR,
+  invoice_to_customer_name VARCHAR,
+  invoice_to_customer_address VARCHAR,
+  service_invoice_flag VARCHAR,
+  apply_support_doc_sys_name VARCHAR,
+  apply_support_doc_org_name VARCHAR,
+  apply_doc_dm_sys_name VARCHAR,
+  send_doc_dm_sysname VARCHAR,
+  support_doc_upload_date TIMESTAMP,
+  paying_customer_id BIGINT,
+  paying_customer_address_id BIGINT,
+  paying_customer_address VARCHAR,
+  shipto_customer_name VARCHAR,
+  shipto_customer_id BIGINT,
+  shipto_customer_address_id BIGINT,
+  shipto_tax_no1 VARCHAR,
+  shipto_tax_no2 VARCHAR,
+  shipto_customer_address VARCHAR,
+  billto_customer_id BIGINT,
+  billto_customer_address_id BIGINT,
+  billto_tax_no1 VARCHAR,
+  billto_tax_no2 VARCHAR,
+  soldto_customer_id BIGINT,
+  mailing_info VARCHAR,
+  waybill_no VARCHAR,
+  comments VARCHAR,
+  office_receive_date TIMESTAMP,
+  office_receive_person BIGINT,
+  tax_invoice_date TIMESTAMP,
+  invoice_required_by VARCHAR,
+  invoice_required_name VARCHAR,
+  special_invoice_flag INTEGER,
+  group_item_flag VARCHAR,
+  export_tax_flag VARCHAR,
+  customer_id_bak BIGINT,
+  native_tax_no VARCHAR,
+  credit_terms_days DECIMAL(38,10),
+  exchange_rate_type INTEGER,
+  date_range_id BIGINT,
+  final_approve_time TIMESTAMP,
+  final_approve_id BIGINT,
+  final_approve_date TIMESTAMP,
+  final_reject_reason VARCHAR,
+  final_approve_remark VARCHAR,
+  adjustment_amount DECIMAL(22,4),
+  send_remark VARCHAR,
+  application_type_id BIGINT,
+  exchange_rate DECIMAL(22,10),
+  credit_reason_id BIGINT,
+  invoice_file_name VARCHAR,
+  special_currency_code VARCHAR,
+  receipt_info VARCHAR,
+  tax_code VARCHAR,
+  send_doc_sysname VARCHAR,
+  send_doc_name VARCHAR,
+  send_doc_receive_date TIMESTAMP,
+  sign_copy_to VARCHAR,
+  print_line_flag VARCHAR,
+  binding_date VARCHAR,
+  payment_terms VARCHAR,
+  bankaccount_id BIGINT,
+  india_invoice_type_id BIGINT,
+  related_gl_date TIMESTAMP,
+  export_erp_error VARCHAR,
+  act_no VARCHAR,
+  edoc_code VARCHAR,
+  send_method_type VARCHAR,
+  company_address BIGINT,
+  batch_no VARCHAR,
+  batch_approve_error_msg VARCHAR,
+  related_invoice_no VARCHAR,
+  related_milestonepoint_date TIMESTAMP,
+  invoice_type INTEGER,
+  export_iexcel_batch_no VARCHAR,
+  export_iexcel_guid VARCHAR,
+  change_no VARCHAR,
+  amount_spell VARCHAR,
+  gl_date TIMESTAMP,
+  tax_adjust_date TIMESTAMP,
+  tax_reporting_date TIMESTAMP,
+  milestone_point_date TIMESTAMP,
+  edoc_code_no_sig VARCHAR,
+  attribute_context BIGINT,
+  attribute1 VARCHAR,
+  attribute2 VARCHAR,
+  attribute3 VARCHAR,
+  attribute4 VARCHAR,
+  attribute5 VARCHAR,
+  attribute6 VARCHAR,
+  attribute7 VARCHAR,
+  attribute8 VARCHAR,
+  attribute9 VARCHAR,
+  attribute10 VARCHAR,
+  attribute11 VARCHAR,
+  attribute12 VARCHAR,
+  attribute13 VARCHAR,
+  attribute14 VARCHAR,
+  attribute15 VARCHAR,
+  version INTEGER,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  description VARCHAR,
+  iexcel_guid VARCHAR,
+  rq_doc VARCHAR,
+  application_code VARCHAR,
+  send_to_email VARCHAR,
+  send_cc_email VARCHAR,
+  source INTEGER,
+  invoice_to_customer_id BIGINT,
+  invoice_scenario VARCHAR,
+  ship_to_customer_state VARCHAR,
+  b2b_status INTEGER,
+  b2b_error_message VARCHAR,
+  receiver VARCHAR,
+  phone VARCHAR,
+  pre_inv_id BIGINT,
+  pre_tax_no VARCHAR,
+  pre_invoice_no VARCHAR,
+  tax_register_no VARCHAR,
+  bank_name VARCHAR,
+  account_no VARCHAR,
+  contact_name VARCHAR,
+  contact_phone VARCHAR,
+  bank_address VARCHAR,
+  average_taxpayerflag VARCHAR,
+  ibilling_support_doc_sys_name VARCHAR,
+  ibilling_support_doc_org_name VARCHAR,
+  taxable_value DECIMAL(38,18),
+  sign_type INTEGER,
+  cust_contact_person VARCHAR,
+  position VARCHAR,
+  sign_remark VARCHAR,
+  acceptance_status INTEGER,
+  acceptance_date TIMESTAMP,
+  dispute_reason_id BIGINT,
+  acceptance_remarks VARCHAR,
+  sign_support_doc_org_name VARCHAR,
+  sign_support_doc_sys_name VARCHAR,
+  accept_support_doc_org_name VARCHAR,
+  accept_support_doc_sys_name VARCHAR,
+  booked VARCHAR,
+  booker_id BIGINT,
+  book_date TIMESTAMP,
+  booked_remark VARCHAR,
+  issue_mode VARCHAR,
+  whether_calculate_tax VARCHAR,
+  receivable_application_id BIGINT,
+  receipt_apply_amount DECIMAL(22,4),
+  prepayment_type INTEGER,
+  reference_receipt_no VARCHAR,
+  orinal_invoice_id BIGINT,
+  export_batch VARCHAR,
+  credit_reason_remark VARCHAR,
+  tax_id BIGINT,
+  installment_allocation_mode INTEGER,
+  tax_loss_flag VARCHAR,
+  tax_loss VARCHAR,
+  special_invoice_detail VARCHAR,
+  adjust_reason VARCHAR,
+  acceptance_doc_sys_name VARCHAR,
+  acceptance_doc_org_name VARCHAR,
+  acceptance_doc_upl_id BIGINT,
+  createacceptanceby VARCHAR,
+  createacceptanceuserid BIGINT,
+  edocversion VARCHAR,
+  inv_invoice_id BIGINT,
+  batch_operate_type INTEGER,
+  terminal_delivery_unit VARCHAR,
+  ref_commercial_invoice_no VARCHAR,
+  no_need_approval VARCHAR,
+  acceptance_doc_upload_date TIMESTAMP,
+  amount_check_method VARCHAR,
+  red_invoice_bill_no VARCHAR,
+  is_ptn_send_b2b VARCHAR,
+  specific_feature_type VARCHAR,
+  sub_credit_reason_id BIGINT,
+  digital_pdf_edoc_id VARCHAR,
+  digital_xml_edoc_id VARCHAR,
+  digital_ofd_edoc_id VARCHAR,
+  digital_file_receive_time TIMESTAMP,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_con_payment_unit_t (
+  payment_unit_id BIGINT,
+  salesperson_id BIGINT,
+  company_id BIGINT,
+  customer_id BIGINT,
+  currency_id BIGINT,
+  bank_id BIGINT,
+  contract_id BIGINT,
+  contract_number VARCHAR,
+  is_pre_payment VARCHAR,
+  pre_payment_date TIMESTAMP,
+  contract_netamount DECIMAL(22,3),
+  contract_vat DECIMAL(22,3),
+  contract_amount DECIMAL(22,3),
+  discount_amount DECIMAL(22,3),
+  amount_modify_reason_id BIGINT,
+  remarks VARCHAR,
+  payment_sch_desc VARCHAR,
+  payment_method DECIMAL(38,18),
+  trade_terms DECIMAL(38,18),
+  delivery_place DECIMAL(38,18),
+  cir_payment_unit_id BIGINT,
+  payment_unit_number VARCHAR,
+  payment_unit_name VARCHAR,
+  sales_type INTEGER,
+  term_type INTEGER,
+  term_type_code VARCHAR,
+  status INTEGER,
+  vatschedule_status INTEGER,
+  bill_to_customer_id BIGINT,
+  bs_status INTEGER,
+  payment_term_id BIGINT,
+  version INTEGER,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  description VARCHAR,
+  equipment_amount DECIMAL(22,3),
+  service_amount DECIMAL(22,3),
+  bs_upload_doc_sys_name VARCHAR,
+  bs_upload_doc_org_name VARCHAR,
+  service_vat_amount DECIMAL(22,3),
+  equipment_vat_amount DECIMAL(22,3),
+  service_net_amount DECIMAL(22,3),
+  equipment_net_amount DECIMAL(22,3),
+  service_vat_rate DECIMAL(5,4),
+  prepayment_in_full_manual_flag VARCHAR,
+  manual_flag_remark VARCHAR,
+  prepayment_manual_date TIMESTAMP,
+  equipment_vat_rate DECIMAL(5,4),
+  software_recurring_amount DECIMAL(22,4),
+  software_recurring_net_amount DECIMAL(22,4),
+  software_recurring_vat_rate DECIMAL(5,4),
+  software_recurring_vat DECIMAL(22,4),
+  sfw_perp_license_amount DECIMAL(22,4),
+  sfw_perp_lice_inc_vat_flag VARCHAR,
+  sfw_perp_lice_vat_rate DECIMAL(5,4),
+  sfw_perp_license_vat DECIMAL(22,4),
+  sfw_perp_lice_net_amount DECIMAL(22,4),
+  financing_flag VARCHAR,
+  financing_amount DECIMAL(22,3),
+  financing_resource VARCHAR,
+  manual_return_amount DECIMAL(22,3),
+  return_date TIMESTAMP,
+  financing_due_date TIMESTAMP,
+  financing_overdue_days DECIMAL(38,10),
+  financing_expenses DECIMAL(38,18),
+  financing_rate DECIMAL(38,18),
+  financing_remark VARCHAR,
+  financing_date TIMESTAMP,
+  equipment_split_amount DECIMAL(22,4),
+  sfw_lice_split_amount DECIMAL(22,4),
+  ras_update_status INTEGER,
+  full_shipment VARCHAR,
+  full_config VARCHAR,
+  tax_bill_to BIGINT,
+  tax_ship_to BIGINT,
+  tax_product_category VARCHAR,
+  tax_rate_code VARCHAR,
+  rate_scenario VARCHAR,
+  tax_before_reform DECIMAL(24,3),
+  need_preship_payment VARCHAR,
+  need_advance_payment VARCHAR,
+  before_shipment_in_full_manual VARCHAR,
+  before_shipment_manual_date TIMESTAMP,
+  pu_delivery_date TIMESTAMP,
+  sofulfill_flag VARCHAR,
+  last_fulfill_date TIMESTAMP,
+  pod_document_flag VARCHAR,
+  pod_approved_date TIMESTAMP,
+  pu_non_delivery_reason VARCHAR,
+  china_net_flag VARCHAR,
+  pu_delivery_flag VARCHAR,
+  billing_name VARCHAR,
+  collection_entity_code VARCHAR,
+  origin_object_id VARCHAR,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_inv_invoice_info_t (
+  invoice_id BIGINT,
+  salesperson_id BIGINT,
+  company_id BIGINT,
+  customer_id BIGINT,
+  balance_amount DECIMAL(22,3),
+  sys_invoice_no VARCHAR,
+  invoice_no VARCHAR,
+  invoice_ref_no VARCHAR,
+  contract_text_amount VARCHAR,
+  issue_date TIMESTAMP,
+  gl_date TIMESTAMP,
+  customer_invoice_id BIGINT,
+  reference_date TIMESTAMP,
+  template_id BIGINT,
+  export_tax_flag VARCHAR,
+  china_invoice_type_id BIGINT,
+  customer_signing_person VARCHAR,
+  office_signing_person VARCHAR,
+  customer_signing_date TIMESTAMP,
+  office_signing_date TIMESTAMP,
+  invoice_to_customer_name VARCHAR,
+  customer_delay_reasons VARCHAR,
+  bill_to_email VARCHAR,
+  include_email_annex_flag INTEGER,
+  cross_reference VARCHAR,
+  auto_tax_invoice VARCHAR,
+  remark VARCHAR,
+  comments VARCHAR,
+  customer_pono VARCHAR,
+  edoc_code VARCHAR,
+  cal_amt_flag INTEGER,
+  mailing_info VARCHAR,
+  tax_id BIGINT,
+  tax_rate DECIMAL(19,3),
+  tax_rate_code VARCHAR,
+  tax_description VARCHAR,
+  tax_amount_1 DECIMAL(22,3),
+  tax_amount_2 DECIMAL(22,3),
+  tax_amount_3 DECIMAL(22,3),
+  vat_amount DECIMAL(22,3),
+  ship_to_state_id BIGINT,
+  tax_approver_date TIMESTAMP,
+  company_manager VARCHAR,
+  manager_accredit_no VARCHAR,
+  main_account VARCHAR,
+  account_accredit_no VARCHAR,
+  status INTEGER,
+  contract_no VARCHAR,
+  contact_phone VARCHAR,
+  tax_registration_no VARCHAR,
+  customer_po_no VARCHAR,
+  bank_account VARCHAR,
+  bank_name VARCHAR,
+  bank_address VARCHAR,
+  native_tax_no VARCHAR,
+  bank_account_id BIGINT,
+  currency_id BIGINT,
+  invoice_category_id BIGINT,
+  invoice_type_id BIGINT,
+  amount_spell VARCHAR,
+  bill_to_address_id BIGINT,
+  bill_to_address VARCHAR,
+  bill_to_attn VARCHAR,
+  ship_to_address_id BIGINT,
+  ship_to_address VARCHAR,
+  ship_to_state VARCHAR,
+  ship_to_street VARCHAR,
+  ship_date TIMESTAMP,
+  net_amount DECIMAL(22,3),
+  total_amount DECIMAL(22,3),
+  adjust_amount DECIMAL(22,3),
+  applied_amount DECIMAL(22,3),
+  credit_amount DECIMAL(22,3),
+  match_amount DECIMAL(22,3),
+  no_credit_amount DECIMAL(22,3),
+  wht_amount DECIMAL(22,3),
+  contact_person_name VARCHAR,
+  contact_person_email VARCHAR,
+  contact_person_fax VARCHAR,
+  contact_person_tel VARCHAR,
+  debit_memo_type VARCHAR,
+  apply_support_doc_sys_name VARCHAR,
+  apply_support_doc_org_name VARCHAR,
+  support_doc_link VARCHAR,
+  support_doc_upload_date TIMESTAMP,
+  approve_support_doc_sys_name VARCHAR,
+  approve_support_doc_org_name VARCHAR,
+  no_seal_invoice_file_name VARCHAR,
+  seal_invoice_file_name VARCHAR,
+  lc_payment_flag VARCHAR,
+  lc_no VARCHAR,
+  mailing_method VARCHAR,
+  send_to_email VARCHAR,
+  send_cc_email VARCHAR,
+  reject_reason VARCHAR,
+  issue_tax_invoice_flag VARCHAR,
+  applicant_id BIGINT,
+  apply_date TIMESTAMP,
+  apply_sys_time TIMESTAMP,
+  apply_remark VARCHAR,
+  approver_id BIGINT,
+  approve_date TIMESTAMP,
+  approve_sys_time TIMESTAMP,
+  approve_remark VARCHAR,
+  sender_id BIGINT,
+  send_date TIMESTAMP,
+  send_sys_time TIMESTAMP,
+  send_remark VARCHAR,
+  dhl_no VARCHAR,
+  notice_delay_days DECIMAL(38,10),
+  sign_id BIGINT,
+  sign_date TIMESTAMP,
+  sign_sys_time TIMESTAMP,
+  sign_remark VARCHAR,
+  acceptance_no VARCHAR,
+  sign_type INTEGER,
+  customer_receive_date TIMESTAMP,
+  tax_approver_id BIGINT,
+  tax_approve_remark VARCHAR,
+  delay_reason_detail VARCHAR,
+  batch_no VARCHAR,
+  cc_staff_id BIGINT,
+  erp_trx_id BIGINT,
+  invoice_gross_amount DECIMAL(38,10),
+  work_flow_id BIGINT,
+  require_no VARCHAR,
+  require_name VARCHAR,
+  customer_register_date TIMESTAMP,
+  customer_return_date TIMESTAMP,
+  customer_return_to_be_date TIMESTAMP,
+  pod_date TIMESTAMP,
+  re_send_date TIMESTAMP,
+  attribute_context VARCHAR,
+  attribute1 VARCHAR,
+  attribute2 VARCHAR,
+  attribute3 VARCHAR,
+  attribute4 VARCHAR,
+  attribute5 VARCHAR,
+  attribute6 VARCHAR,
+  attribute7 VARCHAR,
+  attribute8 VARCHAR,
+  attribute9 VARCHAR,
+  attribute10 VARCHAR,
+  attribute11 VARCHAR,
+  attribute12 VARCHAR,
+  attribute13 VARCHAR,
+  attribute14 VARCHAR,
+  attribute15 VARCHAR,
+  bill_to_address_id_bak BIGINT,
+  customer_id_bak BIGINT,
+  reconciliation_status VARCHAR,
+  erp_payment_terms_id BIGINT,
+  send_invoice_file VARCHAR,
+  mailing_address VARCHAR,
+  cc_mailing_address VARCHAR,
+  dispute_reason_id BIGINT,
+  dm_next_operator_id BIGINT,
+  delay_reason_id BIGINT,
+  attachment_flag INTEGER,
+  acceptance_status INTEGER,
+  special_invoice_flag INTEGER,
+  special_invoice_remark VARCHAR,
+  export_iexcel_batch_no VARCHAR,
+  export_iexcel_guid VARCHAR,
+  tax_invoice_no VARCHAR,
+  tax_invoice_book_no VARCHAR,
+  tax_invoice_date TIMESTAMP,
+  acceptance_contract_person_id BIGINT,
+  send_support_doc_org_name VARCHAR,
+  send_support_doc_sys_name VARCHAR,
+  edoc_code_no_sig VARCHAR,
+  erp_source VARCHAR,
+  invoice_to_customer_id BIGINT,
+  version INTEGER,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  description VARCHAR,
+  iexcel_guid VARCHAR,
+  rq_doc VARCHAR,
+  whether_calculate_tax VARCHAR,
+  transaction_context VARCHAR,
+  final_approver_id BIGINT,
+  final_approve_date TIMESTAMP,
+  final_approve_remark VARCHAR,
+  final_approve_sys_time TIMESTAMP,
+  application_code VARCHAR,
+  sign_support_doc_org_name VARCHAR,
+  sign_support_doc_sys_name VARCHAR,
+  cust_contact_person VARCHAR,
+  position VARCHAR,
+  good_list_doc_org_name VARCHAR,
+  good_list_doc_sys_name VARCHAR,
+  adjust_reason VARCHAR,
+  credit_date TIMESTAMP,
+  invoice_to_customer_address VARCHAR,
+  summary_no VARCHAR,
+  applied_wht_amount DECIMAL(22,3),
+  dispute_detail VARCHAR,
+  acceptance_date TIMESTAMP,
+  b2b_status INTEGER,
+  b2b_error_message VARCHAR,
+  terminal_delivery_unit VARCHAR,
+  accept_support_doc_org_name VARCHAR,
+  accept_support_doc_sys_name VARCHAR,
+  acceptance_due_date TIMESTAMP,
+  acceptance_remarks VARCHAR,
+  final_approve_flag VARCHAR,
+  inv_line_no VARCHAR,
+  acceptance_doc_sys_name VARCHAR,
+  acceptance_doc_org_name VARCHAR,
+  acceptance_doc_upl_id BIGINT,
+  accept_by VARCHAR,
+  rate_to_erp DECIMAL(19,3),
+  exchange_amount DECIMAL(19,3),
+  persian_date VARCHAR,
+  accepted_sys_time TIMESTAMP,
+  batch_operate_type INTEGER,
+  sign_by VARCHAR,
+  no_need_approval VARCHAR,
+  exchange_rate_type VARCHAR,
+  user_exchange_rate DECIMAL(16,6),
+  trx_type VARCHAR,
+  accounting_team VARCHAR,
+  store_group_name VARCHAR,
+  org_id BIGINT,
+  store_group_code VARCHAR,
+  software VARCHAR,
+  software_flag VARCHAR,
+  send_to_email_external_flag VARCHAR,
+  send_by VARCHAR,
+  bg_type INTEGER,
+  special_invoice_type VARCHAR,
+  local_tax_invoice_no VARCHAR,
+  bill_to_customer_location VARCHAR,
+  business_code VARCHAR,
+  capacity_expansion_contract_no VARCHAR,
+  co_number VARCHAR,
+  consignor_address VARCHAR,
+  customs_decl_no VARCHAR,
+  du_id VARCHAR,
+  erp_order_type_id BIGINT,
+  extra_tax_amount DECIMAL(38,10),
+  fob_point_code VARCHAR,
+  freight_accessory_expense DECIMAL(38,18),
+  gross_weight DECIMAL(38,18),
+  insurance_accessory DECIMAL(38,18),
+  invoice_series VARCHAR,
+  license_plate VARCHAR,
+  net_weight DECIMAL(38,18),
+  order_comment VARCHAR,
+  ordered_date TIMESTAMP,
+  other_accessory_expenses DECIMAL(38,18),
+  send_senior_status VARCHAR,
+  ship_from_city VARCHAR,
+  ship_from_country VARCHAR,
+  ship_from_org_code VARCHAR,
+  ship_to_customer_id BIGINT,
+  ship_to_customer_location VARCHAR,
+  site_name VARCHAR,
+  source_invoice_id BIGINT,
+  source_system_code VARCHAR,
+  source_trx_id BIGINT,
+  tax_reporting_date VARCHAR,
+  transaction_status VARCHAR,
+  volume_quantity DECIMAL(24,10),
+  volume_type VARCHAR,
+  bill_to_customer_contact_id BIGINT,
+  bill_to_customer_location_id BIGINT,
+  cancel_flag VARCHAR,
+  currency VARCHAR,
+  customer_contact_id BIGINT,
+  customer_po_number VARCHAR,
+  customer_site VARCHAR,
+  erp_order_source_id BIGINT,
+  erp_org_id DECIMAL(38,0),
+  erp_ship_from_org_id DECIMAL(38,0),
+  erp_sold_to_org_id DECIMAL(38,0),
+  invoice_first_flag VARCHAR,
+  invoice_source VARCHAR,
+  invoice_to_contact_id DECIMAL(38,0),
+  invoice_to_org_id DECIMAL(38,0),
+  order_creation_date TIMESTAMP,
+  order_header_id DECIMAL(38,0),
+  order_number VARCHAR,
+  penalty_amount DECIMAL(38,10),
+  remit_to_address VARCHAR,
+  ship_customer_id BIGINT,
+  ship_from_state VARCHAR,
+  ship_to_contact_id DECIMAL(38,0),
+  ship_to_customer_contact_id BIGINT,
+  ship_to_customer_location_id BIGINT,
+  ship_to_org_id DECIMAL(38,0),
+  so_number VARCHAR,
+  solution_sales_order VARCHAR,
+  source_invoice_no VARCHAR,
+  sourcetrxid BIGINT,
+  territory BIGINT,
+  total_gross_weight DECIMAL(38,18),
+  total_net_weight DECIMAL(38,18),
+  volume_number VARCHAR,
+  unique_key VARCHAR,
+  volume DECIMAL(24,10),
+  specific_feature_type VARCHAR,
+  digital_pdf_edoc_id VARCHAR,
+  digital_xml_edoc_id VARCHAR,
+  digital_ofd_edoc_id VARCHAR,
+  invoice_usage VARCHAR,
+  mail_delivered_flag VARCHAR,
+  red_invoice_bill_no VARCHAR,
+  digital_invoice_status VARCHAR,
+  edoc_qr_flag VARCHAR,
+  parallel_flag VARCHAR,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_opt_application_inst_t (
+  application_inst_id BIGINT,
+  operator_application_id BIGINT,
+  contract_id BIGINT,
+  payment_unit_id BIGINT,
+  total_amount DECIMAL(22,3),
+  contract_amount DECIMAL(22,3),
+  unbilled_amount DECIMAL(22,3),
+  billed_amount DECIMAL(22,3),
+  invoiced_amount DECIMAL(22,3),
+  version INTEGER,
+  creation_date TIMESTAMP,
+  created_by BIGINT,
+  last_update_date TIMESTAMP,
+  last_updated_by BIGINT,
+  description VARCHAR,
+  pu_tax_rate DECIMAL(5,4),
+  amount_check_method VARCHAR,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_opt_application_t (
+  operator_application_id BIGINT,
+  application_code VARCHAR,
+  contract_id BIGINT,
+  salesperson_id BIGINT,
+  company_id BIGINT,
+  customer_id BIGINT,
+  application_type INTEGER,
+  currency_id BIGINT,
+  accounting_tax_flag INTEGER,
+  goods_list_org_doc VARCHAR,
+  goods_list_sys_doc VARCHAR,
+  total_amount DECIMAL(22,3),
+  tax_invoice_customer_name VARCHAR,
+  china_invoice_type_id BIGINT,
+  installment_allocation_mode INTEGER,
+  applicant_id BIGINT,
+  applicant_time TIMESTAMP,
+  special_invoice_eflow_link VARCHAR,
+  mailing_info VARCHAR,
+  apply_remark VARCHAR,
+  is_discount VARCHAR,
+  status INTEGER,
+  reject_reason VARCHAR,
+  approve_id BIGINT,
+  approve_time TIMESTAMP,
+  version INTEGER,
+  creation_date TIMESTAMP,
+  created_by BIGINT,
+  last_update_date TIMESTAMP,
+  last_updated_by BIGINT,
+  description VARCHAR,
+  remark VARCHAR,
+  submit_by BIGINT,
+  upload_result_id BIGINT,
+  billing_approve_id BIGINT,
+  cc_email VARCHAR,
+  tax_id BIGINT,
+  tax_rate_code VARCHAR,
+  tax_description VARCHAR,
+  tax_amount_1 DECIMAL(22,3),
+  net_amount DECIMAL(22,3),
+  receiver VARCHAR,
+  phone VARCHAR,
+  mailing_method VARCHAR,
+  tax_invoice_customer_id BIGINT,
+  unit_hide_flag VARCHAR,
+  split_flag VARCHAR,
+  terminal_delivery_unit VARCHAR,
+  send_approve_id BIGINT,
+  credit_invoice_type INTEGER,
+  opt_credit_reason_id BIGINT,
+  opt_credit_reason VARCHAR,
+  reopens_immediately VARCHAR,
+  tax_loss_flag VARCHAR,
+  tax_loss VARCHAR,
+  cfo_approve_id BIGINT,
+  scarlet_letter_notification_no VARCHAR,
+  dhl_no VARCHAR,
+  approve_path DECIMAL(38,18),
+  pref_flag VARCHAR,
+  first_approve_id BIGINT,
+  first_mile_tri_date TIMESTAMP,
+  org_tax_invoice_no VARCHAR,
+  tax_rate DECIMAL(38,18),
+  tracker_id BIGINT,
+  issue_mode VARCHAR,
+  source VARCHAR,
+  is_use_workflow VARCHAR,
+  work_flow_id BIGINT,
+  amount_check_method VARCHAR,
+  no_need_approval VARCHAR,
+  specific_feature_type VARCHAR,
+  sub_credit_reason_id BIGINT,
+  application_type_id BIGINT,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_proc_node_define_t (
+  node_define_id BIGINT,
+  node_define_code VARCHAR,
+  node_define_name VARCHAR,
+  node_define_name_cn VARCHAR,
+  node_define_type INTEGER,
+  node_role_id BIGINT,
+  sys_flag VARCHAR,
+  description VARCHAR,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_proc_route_t (
+  route_id BIGINT,
+  proc_define_id BIGINT,
+  node_define_id BIGINT,
+  route_seq BIGINT,
+  pre_node_define_when_reject BIGINT,
+  pre_listener VARCHAR,
+  after_listener VARCHAR,
+  description VARCHAR,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_proc_task_t (
+  task_id BIGINT,
+  proc_inst_id BIGINT,
+  route_id BIGINT,
+  handler_id BIGINT,
+  description VARCHAR,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.tpl_fd_message_t (
+  message_id BIGINT,
+  message_key VARCHAR,
+  message VARCHAR,
+  language VARCHAR,
+  remark VARCHAR,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  app_name VARCHAR,
+  ispublic DECIMAL(1,0),
+  filename VARCHAR,
+  message_md5_key VARCHAR,
+  message_cf_key VARCHAR,
+  cdc_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.tpl_user_t (
+  fname VARCHAR,
+  lname VARCHAR,
+  employee_number VARCHAR,
+  area_code VARCHAR,
+  apartment_code VARCHAR,
+  w3_account VARCHAR,
+  type VARCHAR,
+  default_role VARCHAR,
+  email VARCHAR,
+  user_id BIGINT,
+  created_by BIGINT,
+  creation_date TIMESTAMP,
+  last_updated_by BIGINT,
+  last_update_date TIMESTAMP,
+  hr_employee_id BIGINT,
+  employee_name_eng VARCHAR,
+  phone VARCHAR,
+  position BIGINT,
+  fax VARCHAR,
+  organization_id BIGINT,
+  temporary_contact VARCHAR,
+  location VARCHAR,
+  start_date TIMESTAMP,
+  end_date TIMESTAMP,
+  disable_date TIMESTAMP,
+  last_update_login BIGINT,
+  description VARCHAR,
+  enable_flag VARCHAR,
+  uu_id VARCHAR,
+  default_org VARCHAR,
+  global_user_id BIGINT,
+  cdc_last_update_date VARCHAR,
+  logical_is_deleted BOOLEAN,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_comm_contract_t (
+  contract_id BIGINT,
+  salesperson_id BIGINT,
+  company_id BIGINT,
+  contract_number VARCHAR,
+  contract_flag INTEGER,
+  customer_pono VARCHAR,
+  bg_code VARCHAR,
+  bg_cn_name VARCHAR,
+  bg_en_name VARCHAR,
+  hw_contract_bussource_code VARCHAR,
+  project_number VARCHAR,
+  project_name VARCHAR,
+  customer_id BIGINT,
+  _hoodie_event_time VARCHAR,
+  frame_contract_no VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_comm_currencies_t (
+  hw_sf_currencies_id VARCHAR,
+  from_currency_id VARCHAR,
+  from_currency_code VARCHAR,
+  start_date TIMESTAMP,
+  usd_rate DECIMAL(38,18),
+  rmb_rate DECIMAL(38,18),
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_comm_customer_t (
+  customer_id BIGINT,
+  customer_code VARCHAR,
+  customer_name VARCHAR,
+  customer_group_code VARCHAR,
+  customer_group_name VARCHAR,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_comm_invtype_t (
+  invoice_type_id BIGINT,
+  type_code BIGINT,
+  invoice_category_code VARCHAR,
+  invoice_category VARCHAR,
+  invoice_type_name VARCHAR,
+  _hoodie_event_time VARCHAR
+);
+
+CREATE TABLE exp_ins.cfs_salesperson_region_t (
+  hw_sf_salesperson_id VARCHAR,
+  salesperson_id BIGINT,
+  cfs_region_id BIGINT,
+  salesperson_code VARCHAR,
+  salesperson_name VARCHAR,
+  cfs_region_code VARCHAR,
+  cfs_region_en_name VARCHAR,
+  cfs_repoffice_code VARCHAR,
+  cfs_repoffice_en_name VARCHAR,
+  cfs_country_code VARCHAR,
+  cfs_country_en_name VARCHAR,
+  cfs_country_short_name VARCHAR,
+  unit_code VARCHAR,
+  rev_coa_geo_pc_code VARCHAR,
+  country_code VARCHAR,
+  country_cn_name VARCHAR,
+  country_en_name VARCHAR,
+  repoffice_code VARCHAR,
+  repoffice_cn_name VARCHAR,
+  repoffice_en_name VARCHAR,
+  region_code VARCHAR,
+  region_cn_name VARCHAR,
+  region_en_name VARCHAR,
+  office_cn_name VARCHAR,
+  office_code VARCHAR,
+  office_en_name VARCHAR,
+  _hoodie_event_time VARCHAR,
+  source_code VARCHAR
+);
+
+CREATE TABLE exp_ins.dwd_billing_In_transit_dtl_t_05 (
+  id VARCHAR,
+  head_id VARCHAR,
+  period_id INTEGER,
+  period_id_dd INTEGER,
+  period_id_qty INTEGER,
+  business_id BIGINT,
+  bill_type VARCHAR,
+  business_type VARCHAR,
+  node_type VARCHAR,
+  invoice_type_id INTEGER,
+  invoice_category VARCHAR,
+  invoice_type_name VARCHAR,
+  salesperson_id VARCHAR,
+  company_id BIGINT,
+  company_code VARCHAR,
+  company_name VARCHAR,
+  cfs_salesperson_code VARCHAR,
+  cfs_salesperson_name VARCHAR,
+  cfs_region_id BIGINT,
+  cfs_region_code VARCHAR,
+  cfs_region_en_name VARCHAR,
+  cfs_repoffice_code VARCHAR,
+  cfs_repoffice_en_name VARCHAR,
+  region_code VARCHAR,
+  region_cn_name VARCHAR,
+  region_en_name VARCHAR,
+  repoffice_code VARCHAR,
+  repoffice_cn_name VARCHAR,
+  repoffice_en_name VARCHAR,
+  country_code VARCHAR,
+  country_cn_name VARCHAR,
+  country_en_name VARCHAR,
+  bg_code VARCHAR,
+  bg_cn_name VARCHAR,
+  bg_en_name VARCHAR,
+  customer_id BIGINT,
+  customer_code VARCHAR,
+  customer_name VARCHAR,
+  customer_group_name VARCHAR,
+  contract_id BIGINT,
+  contract_number VARCHAR,
+  customer_pono VARCHAR,
+  hw_contract_bussource_code VARCHAR,
+  project_number VARCHAR,
+  project_name VARCHAR,
+  invoice_id BIGINT,
+  invoice_no VARCHAR,
+  operator_application_id BIGINT,
+  application_code VARCHAR,
+  milestone_name VARCHAR,
+  currency_id BIGINT,
+  currency_code VARCHAR,
+  usd_total_amount DECIMAL(38,10),
+  rmb_total_amount DECIMAL(38,10),
+  total_amount DECIMAL(38,10),
+  creation_date TIMESTAMP,
+  submit_date TIMESTAMP,
+  applicant_time TIMESTAMP,
+  con_mi_qty BIGINT,
+  current_handler_id BIGINT,
+  current_handler_code VARCHAR,
+  current_handler_name VARCHAR,
+  currentrole VARCHAR,
+  todo_billing_id BIGINT,
+  payment_unit_id BIGINT,
+  source_code VARCHAR,
+  details_flag VARCHAR,
+  billing_status VARCHAR,
+  rtd_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  src_cdc_event_date TIMESTAMP,
+  src_cdc_last_update_date TIMESTAMP,
+  _hoodie_event_time VARCHAR,
+  frame_contract_no VARCHAR,
+  reason_code VARCHAR,
+  sub_reason_code VARCHAR,
+  remarks VARCHAR,
+  responsible_person VARCHAR,
+  estimated_resolution_time TIMESTAMP,
+  cfs_status VARCHAR,
+  sla BIGINT,
+  reason_cn_name VARCHAR,
+  reason_en_name VARCHAR,
+  sub_reason_cn_name VARCHAR,
+  sub_reason_en_name VARCHAR,
+  responsible_person_id BIGINT,
+  responsible_person_code VARCHAR,
+  tax_invoice_date TIMESTAMP,
+  payment_unit_number VARCHAR
+);
+
+CREATE TABLE exp_ins.dwd_billing_In_transit_t_05 (
+  head_id VARCHAR,
+  period_id INTEGER,
+  period_id_dd INTEGER,
+  period_id_qty INTEGER,
+  bill_type VARCHAR,
+  business_type VARCHAR,
+  node_type VARCHAR,
+  invoice_category VARCHAR,
+  invoice_type_name VARCHAR,
+  company_code VARCHAR,
+  cfs_salesperson_code VARCHAR,
+  cfs_salesperson_name VARCHAR,
+  cfs_region_id BIGINT,
+  cfs_region_code VARCHAR,
+  cfs_region_en_name VARCHAR,
+  cfs_repoffice_code VARCHAR,
+  cfs_repoffice_en_name VARCHAR,
+  region_code VARCHAR,
+  region_cn_name VARCHAR,
+  region_en_name VARCHAR,
+  repoffice_code VARCHAR,
+  repoffice_cn_name VARCHAR,
+  repoffice_en_name VARCHAR,
+  country_code VARCHAR,
+  country_cn_name VARCHAR,
+  country_en_name VARCHAR,
+  bg_code VARCHAR,
+  bg_cn_name VARCHAR,
+  bg_en_name VARCHAR,
+  customer_code VARCHAR,
+  customer_name VARCHAR,
+  customer_group_name VARCHAR,
+  contract_number VARCHAR,
+  customer_pono VARCHAR,
+  hw_contract_bussource_code VARCHAR,
+  project_number VARCHAR,
+  project_name VARCHAR,
+  invoice_id BIGINT,
+  invoice_no VARCHAR,
+  operator_application_id BIGINT,
+  milestone_name VARCHAR,
+  currency_code VARCHAR,
+  usd_total_amount DECIMAL(38,10),
+  rmb_total_amount DECIMAL(38,10),
+  total_amount DECIMAL(38,10),
+  creation_date TIMESTAMP,
+  submit_date TIMESTAMP,
+  applicant_time TIMESTAMP,
+  con_mi_qty BIGINT,
+  over_due_days BIGINT,
+  current_handler_code VARCHAR,
+  current_handler_name VARCHAR,
+  currentrole VARCHAR,
+  todo_billing_id BIGINT,
+  source_code VARCHAR,
+  details_flag VARCHAR,
+  billing_status VARCHAR,
+  rtd_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  src_cdc_event_date TIMESTAMP,
+  src_cdc_last_update_date TIMESTAMP,
+  _hoodie_event_time VARCHAR,
+  frame_contract_no VARCHAR,
+  reason_code VARCHAR,
+  sub_reason_code VARCHAR,
+  remarks VARCHAR,
+  responsible_person VARCHAR,
+  estimated_resolution_time TIMESTAMP,
+  cfs_status VARCHAR,
+  sla BIGINT,
+  reason_cn_name VARCHAR,
+  reason_en_name VARCHAR,
+  sub_reason_cn_name VARCHAR,
+  sub_reason_en_name VARCHAR,
+  responsible_person_id BIGINT,
+  responsible_person_code VARCHAR,
+  tax_invoice_date TIMESTAMP,
+  payment_unit_number VARCHAR
+);
+
+CREATE TABLE exp_ins.dwd_job_status_t_05 (
+  id VARCHAR,
+  job_name VARCHAR,
+  job_desc VARCHAR,
+  job_start_date TIMESTAMP,
+  job_last_start_date TIMESTAMP,
+  job_last_end_date TIMESTAMP,
+  rtd_last_update_date TIMESTAMP,
+  logical_is_deleted BOOLEAN,
+  src_cdc_event_date TIMESTAMP,
+  src_cdc_last_update_date TIMESTAMP,
+  _hoodie_event_time VARCHAR
+);
+
+
+-- SOURCE_FILE: create_primary_key_ddl.sql
+-- TRANSFORMATIONS: dialect adaptation for openGauss
+
+ALTER TABLE exp_ins.cfs_cfg_company_t ADD PRIMARY KEY (company_id);
+ALTER TABLE exp_ins.cfs_cinv_customer_invoice_t ADD PRIMARY KEY (customer_invoice_id);
+ALTER TABLE exp_ins.cfs_con_payment_unit_t ADD PRIMARY KEY (payment_unit_id);
+ALTER TABLE exp_ins.cfs_inv_invoice_info_t ADD PRIMARY KEY (invoice_id);
+ALTER TABLE exp_ins.cfs_opt_application_inst_t ADD PRIMARY KEY (application_inst_id);
+ALTER TABLE exp_ins.cfs_opt_application_t ADD PRIMARY KEY (operator_application_id);
+ALTER TABLE exp_ins.cfs_proc_node_define_t ADD PRIMARY KEY (node_define_id);
+ALTER TABLE exp_ins.cfs_proc_route_t ADD PRIMARY KEY (route_id);
+ALTER TABLE exp_ins.cfs_proc_task_t ADD PRIMARY KEY (task_id);
+ALTER TABLE exp_ins.tpl_fd_message_t ADD PRIMARY KEY (message_id);
+ALTER TABLE exp_ins.tpl_user_t ADD PRIMARY KEY (user_id);
+ALTER TABLE exp_ins.cfs_comm_contract_t ADD PRIMARY KEY (contract_id);
+ALTER TABLE exp_ins.cfs_comm_currencies_t ADD PRIMARY KEY (hw_sf_currencies_id);
+ALTER TABLE exp_ins.cfs_comm_customer_t ADD PRIMARY KEY (customer_id);
+ALTER TABLE exp_ins.cfs_comm_invtype_t ADD PRIMARY KEY (invoice_type_id);
+ALTER TABLE exp_ins.cfs_salesperson_region_t ADD PRIMARY KEY (hw_sf_salesperson_id);
+ALTER TABLE exp_ins.dwd_billing_In_transit_dtl_t_05 ADD PRIMARY KEY (id);
+ALTER TABLE exp_ins.dwd_billing_In_transit_t_05 ADD PRIMARY KEY (head_id);
+ALTER TABLE exp_ins.dwd_job_status_t_05 ADD PRIMARY KEY (id);
+
+CREATE TABLE exp_ins.dtl_rc (id VARCHAR, head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, business_id BIGINT, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_type_id INTEGER, invoice_category VARCHAR, invoice_type_name VARCHAR, salesperson_id VARCHAR, company_id BIGINT, company_code VARCHAR, company_name VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_id BIGINT, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_id BIGINT, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, application_code VARCHAR, milestone_name VARCHAR, currency_id BIGINT, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, current_handler_id BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, payment_unit_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE TABLE exp_ins.sum_rc (head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_category VARCHAR, invoice_type_name VARCHAR, company_code VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, milestone_name VARCHAR, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, over_due_days BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE INDEX dtl_rc_pk ON exp_ins.dtl_rc (id, logical_is_deleted);
+CREATE INDEX sum_rc_pk ON exp_ins.sum_rc (head_id, logical_is_deleted);
+CREATE TABLE exp_ins.dtl_lv (id VARCHAR, head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, business_id BIGINT, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_type_id INTEGER, invoice_category VARCHAR, invoice_type_name VARCHAR, salesperson_id VARCHAR, company_id BIGINT, company_code VARCHAR, company_name VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_id BIGINT, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_id BIGINT, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, application_code VARCHAR, milestone_name VARCHAR, currency_id BIGINT, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, current_handler_id BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, payment_unit_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE TABLE exp_ins.sum_lv (head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_category VARCHAR, invoice_type_name VARCHAR, company_code VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, milestone_name VARCHAR, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, over_due_days BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE INDEX dtl_lv_pk ON exp_ins.dtl_lv (id, logical_is_deleted);
+CREATE INDEX sum_lv_pk ON exp_ins.sum_lv (head_id, logical_is_deleted);
+CREATE TABLE exp_ins.dtl_mv (id VARCHAR, head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, business_id BIGINT, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_type_id INTEGER, invoice_category VARCHAR, invoice_type_name VARCHAR, salesperson_id VARCHAR, company_id BIGINT, company_code VARCHAR, company_name VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_id BIGINT, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_id BIGINT, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, application_code VARCHAR, milestone_name VARCHAR, currency_id BIGINT, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, current_handler_id BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, payment_unit_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE TABLE exp_ins.sum_mv (head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_category VARCHAR, invoice_type_name VARCHAR, company_code VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, milestone_name VARCHAR, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, over_due_days BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE INDEX dtl_mv_pk ON exp_ins.dtl_mv (id, logical_is_deleted);
+CREATE INDEX sum_mv_pk ON exp_ins.sum_mv (head_id, logical_is_deleted);
+CREATE TABLE exp_ins.dtl_cw (id VARCHAR, head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, business_id BIGINT, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_type_id INTEGER, invoice_category VARCHAR, invoice_type_name VARCHAR, salesperson_id VARCHAR, company_id BIGINT, company_code VARCHAR, company_name VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_id BIGINT, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_id BIGINT, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, application_code VARCHAR, milestone_name VARCHAR, currency_id BIGINT, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, current_handler_id BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, payment_unit_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE TABLE exp_ins.sum_cw (head_id VARCHAR, period_id INTEGER, period_id_dd INTEGER, period_id_qty INTEGER, bill_type VARCHAR, business_type VARCHAR, node_type VARCHAR, invoice_category VARCHAR, invoice_type_name VARCHAR, company_code VARCHAR, cfs_salesperson_code VARCHAR, cfs_salesperson_name VARCHAR, cfs_region_id BIGINT, cfs_region_code VARCHAR, cfs_region_en_name VARCHAR, cfs_repoffice_code VARCHAR, cfs_repoffice_en_name VARCHAR, region_code VARCHAR, region_cn_name VARCHAR, region_en_name VARCHAR, repoffice_code VARCHAR, repoffice_cn_name VARCHAR, repoffice_en_name VARCHAR, country_code VARCHAR, country_cn_name VARCHAR, country_en_name VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, customer_code VARCHAR, customer_name VARCHAR, customer_group_name VARCHAR, contract_number VARCHAR, customer_pono VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, invoice_id BIGINT, invoice_no VARCHAR, operator_application_id BIGINT, milestone_name VARCHAR, currency_code VARCHAR, usd_total_amount DECIMAL(38,10), rmb_total_amount DECIMAL(38,10), total_amount DECIMAL(38,10), creation_date TIMESTAMP, submit_date TIMESTAMP, applicant_time TIMESTAMP, con_mi_qty BIGINT, over_due_days BIGINT, current_handler_code VARCHAR, current_handler_name VARCHAR, currentrole VARCHAR, todo_billing_id BIGINT, source_code VARCHAR, details_flag VARCHAR, billing_status VARCHAR, rtd_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, src_cdc_event_date TIMESTAMP, src_cdc_last_update_date TIMESTAMP, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR, reason_code VARCHAR, sub_reason_code VARCHAR, remarks VARCHAR, responsible_person VARCHAR, estimated_resolution_time TIMESTAMP, cfs_status VARCHAR, sla BIGINT, reason_cn_name VARCHAR, reason_en_name VARCHAR, sub_reason_cn_name VARCHAR, sub_reason_en_name VARCHAR, responsible_person_id BIGINT, responsible_person_code VARCHAR, tax_invoice_date TIMESTAMP, payment_unit_number VARCHAR);
+CREATE INDEX dtl_cw_pk ON exp_ins.dtl_cw (id, logical_is_deleted);
+CREATE INDEX sum_cw_pk ON exp_ins.sum_cw (head_id, logical_is_deleted);
+COPY exp_ins.cfs_proc_node_define_t FROM '__DATA_ROOT__/static/s000_cqrs_cfs.cfs_proc_node_define_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.cfs_comm_currencies_t FROM '__DATA_ROOT__/static/s000_dwt_hws_iao.cfs_comm_currencies_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.cfs_comm_customer_t FROM '__DATA_ROOT__/static/s000_dwt_hws_iao.cfs_comm_customer_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.cfs_comm_invtype_t FROM '__DATA_ROOT__/static/s000_dwt_hws_iao.cfs_comm_invtype_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.cfs_salesperson_region_t FROM '__DATA_ROOT__/static/s000_dwt_hws_iao.cfs_salesperson_region_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.dwd_job_status_t_05 FROM '__DATA_ROOT__/static/s000_dwt_hws_iao.dwd_job_status_t_05.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+CREATE TABLE exp_ins.mlog_ins_company (company_id BIGINT, company_abbr VARCHAR, company_address VARCHAR, company_name_zh VARCHAR, company_address_zh VARCHAR, company_code VARCHAR, detail VARCHAR, integrate_invoice_flag VARCHAR, integrate_receipt_flag VARCHAR, exchange_flag VARCHAR, fax VARCHAR, fax_area VARCHAR, enable_flag VARCHAR, global_flag VARCHAR, internal_flag VARCHAR, tax_invoice_active VARCHAR, memo_line_id BIGINT, company_name VARCHAR, orgid BIGINT, remark VARCHAR, sign_flag VARCHAR, sob_id BIGINT, tel VARCHAR, tel_area VARCHAR, use_flag INTEGER, currency_id BIGINT, exchange_type INTEGER, invoice_account_type VARCHAR, schedule_tax_flag VARCHAR, version INTEGER, source VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, dm_memo_line_id BIGINT, short_name VARCHAR, ou_name VARCHAR, organization_id BIGINT, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_company (company_id BIGINT, company_abbr VARCHAR, company_address VARCHAR, company_name_zh VARCHAR, company_address_zh VARCHAR, company_code VARCHAR, detail VARCHAR, integrate_invoice_flag VARCHAR, integrate_receipt_flag VARCHAR, exchange_flag VARCHAR, fax VARCHAR, fax_area VARCHAR, enable_flag VARCHAR, global_flag VARCHAR, internal_flag VARCHAR, tax_invoice_active VARCHAR, memo_line_id BIGINT, company_name VARCHAR, orgid BIGINT, remark VARCHAR, sign_flag VARCHAR, sob_id BIGINT, tel VARCHAR, tel_area VARCHAR, use_flag INTEGER, currency_id BIGINT, exchange_type INTEGER, invoice_account_type VARCHAR, schedule_tax_flag VARCHAR, version INTEGER, source VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, dm_memo_line_id BIGINT, short_name VARCHAR, ou_name VARCHAR, organization_id BIGINT, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_cinv (customer_invoice_id BIGINT, sys_invoice_no VARCHAR, invoice_book_no VARCHAR, china_invoice_type_id BIGINT, erp_transaction_id BIGINT, sign_no VARCHAR, sign_no_created_by BIGINT, sign_no_creation_date TIMESTAMP, invoice_no VARCHAR, issue_date TIMESTAMP, invoice_to_tax_no VARCHAR, accounting_tax_flag INTEGER, company_id BIGINT, salesperson_id BIGINT, status INTEGER, china_cti_id BIGINT, reference_no VARCHAR, export_status VARCHAR, applicant_id BIGINT, template_id BIGINT, approver_id BIGINT, sender_id BIGINT, sign_id BIGINT, apply_date TIMESTAMP, approve_date TIMESTAMP, send_date TIMESTAMP, sign_date TIMESTAMP, acceptance_contact_person_id BIGINT, customer_receive_person VARCHAR, customer_receive_date TIMESTAMP, apply_sys_time TIMESTAMP, approve_sys_time TIMESTAMP, send_sys_time TIMESTAMP, sign_sys_time TIMESTAMP, vat_amount DECIMAL(22,4), total_amount DECIMAL(22,4), credit_amount DECIMAL(22,4), applied_amount DECIMAL(22,4), net_amount DECIMAL(22,4), matched_amount DECIMAL(22,4), balance DECIMAL(22,4), contract_billed_amount DECIMAL(22,4), china_tax_rate DECIMAL(38,18), currency_id BIGINT, customer_id BIGINT, sign_flag VARCHAR, reject_reason VARCHAR, feedback_info VARCHAR, workflow_id BIGINT, manager_id BIGINT, account_id BIGINT, approve_remark VARCHAR, manager_accredit_no VARCHAR, remark VARCHAR, account_accredit_no VARCHAR, invoice_to_customer_name VARCHAR, invoice_to_customer_address VARCHAR, service_invoice_flag VARCHAR, apply_support_doc_sys_name VARCHAR, apply_support_doc_org_name VARCHAR, apply_doc_dm_sys_name VARCHAR, send_doc_dm_sysname VARCHAR, support_doc_upload_date TIMESTAMP, paying_customer_id BIGINT, paying_customer_address_id BIGINT, paying_customer_address VARCHAR, shipto_customer_name VARCHAR, shipto_customer_id BIGINT, shipto_customer_address_id BIGINT, shipto_tax_no1 VARCHAR, shipto_tax_no2 VARCHAR, shipto_customer_address VARCHAR, billto_customer_id BIGINT, billto_customer_address_id BIGINT, billto_tax_no1 VARCHAR, billto_tax_no2 VARCHAR, soldto_customer_id BIGINT, mailing_info VARCHAR, waybill_no VARCHAR, comments VARCHAR, office_receive_date TIMESTAMP, office_receive_person BIGINT, tax_invoice_date TIMESTAMP, invoice_required_by VARCHAR, invoice_required_name VARCHAR, special_invoice_flag INTEGER, group_item_flag VARCHAR, export_tax_flag VARCHAR, customer_id_bak BIGINT, native_tax_no VARCHAR, credit_terms_days DECIMAL(38,10), exchange_rate_type INTEGER, date_range_id BIGINT, final_approve_time TIMESTAMP, final_approve_id BIGINT, final_approve_date TIMESTAMP, final_reject_reason VARCHAR, final_approve_remark VARCHAR, adjustment_amount DECIMAL(22,4), send_remark VARCHAR, application_type_id BIGINT, exchange_rate DECIMAL(22,10), credit_reason_id BIGINT, invoice_file_name VARCHAR, special_currency_code VARCHAR, receipt_info VARCHAR, tax_code VARCHAR, send_doc_sysname VARCHAR, send_doc_name VARCHAR, send_doc_receive_date TIMESTAMP, sign_copy_to VARCHAR, print_line_flag VARCHAR, binding_date VARCHAR, payment_terms VARCHAR, bankaccount_id BIGINT, india_invoice_type_id BIGINT, related_gl_date TIMESTAMP, export_erp_error VARCHAR, act_no VARCHAR, edoc_code VARCHAR, send_method_type VARCHAR, company_address BIGINT, batch_no VARCHAR, batch_approve_error_msg VARCHAR, related_invoice_no VARCHAR, related_milestonepoint_date TIMESTAMP, invoice_type INTEGER, export_iexcel_batch_no VARCHAR, export_iexcel_guid VARCHAR, change_no VARCHAR, amount_spell VARCHAR, gl_date TIMESTAMP, tax_adjust_date TIMESTAMP, tax_reporting_date TIMESTAMP, milestone_point_date TIMESTAMP, edoc_code_no_sig VARCHAR, attribute_context BIGINT, attribute1 VARCHAR, attribute2 VARCHAR, attribute3 VARCHAR, attribute4 VARCHAR, attribute5 VARCHAR, attribute6 VARCHAR, attribute7 VARCHAR, attribute8 VARCHAR, attribute9 VARCHAR, attribute10 VARCHAR, attribute11 VARCHAR, attribute12 VARCHAR, attribute13 VARCHAR, attribute14 VARCHAR, attribute15 VARCHAR, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, iexcel_guid VARCHAR, rq_doc VARCHAR, application_code VARCHAR, send_to_email VARCHAR, send_cc_email VARCHAR, source INTEGER, invoice_to_customer_id BIGINT, invoice_scenario VARCHAR, ship_to_customer_state VARCHAR, b2b_status INTEGER, b2b_error_message VARCHAR, receiver VARCHAR, phone VARCHAR, pre_inv_id BIGINT, pre_tax_no VARCHAR, pre_invoice_no VARCHAR, tax_register_no VARCHAR, bank_name VARCHAR, account_no VARCHAR, contact_name VARCHAR, contact_phone VARCHAR, bank_address VARCHAR, average_taxpayerflag VARCHAR, ibilling_support_doc_sys_name VARCHAR, ibilling_support_doc_org_name VARCHAR, taxable_value DECIMAL(38,18), sign_type INTEGER, cust_contact_person VARCHAR, position VARCHAR, sign_remark VARCHAR, acceptance_status INTEGER, acceptance_date TIMESTAMP, dispute_reason_id BIGINT, acceptance_remarks VARCHAR, sign_support_doc_org_name VARCHAR, sign_support_doc_sys_name VARCHAR, accept_support_doc_org_name VARCHAR, accept_support_doc_sys_name VARCHAR, booked VARCHAR, booker_id BIGINT, book_date TIMESTAMP, booked_remark VARCHAR, issue_mode VARCHAR, whether_calculate_tax VARCHAR, receivable_application_id BIGINT, receipt_apply_amount DECIMAL(22,4), prepayment_type INTEGER, reference_receipt_no VARCHAR, orinal_invoice_id BIGINT, export_batch VARCHAR, credit_reason_remark VARCHAR, tax_id BIGINT, installment_allocation_mode INTEGER, tax_loss_flag VARCHAR, tax_loss VARCHAR, special_invoice_detail VARCHAR, adjust_reason VARCHAR, acceptance_doc_sys_name VARCHAR, acceptance_doc_org_name VARCHAR, acceptance_doc_upl_id BIGINT, createacceptanceby VARCHAR, createacceptanceuserid BIGINT, edocversion VARCHAR, inv_invoice_id BIGINT, batch_operate_type INTEGER, terminal_delivery_unit VARCHAR, ref_commercial_invoice_no VARCHAR, no_need_approval VARCHAR, acceptance_doc_upload_date TIMESTAMP, amount_check_method VARCHAR, red_invoice_bill_no VARCHAR, is_ptn_send_b2b VARCHAR, specific_feature_type VARCHAR, sub_credit_reason_id BIGINT, digital_pdf_edoc_id VARCHAR, digital_xml_edoc_id VARCHAR, digital_ofd_edoc_id VARCHAR, digital_file_receive_time TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_cinv (customer_invoice_id BIGINT, sys_invoice_no VARCHAR, invoice_book_no VARCHAR, china_invoice_type_id BIGINT, erp_transaction_id BIGINT, sign_no VARCHAR, sign_no_created_by BIGINT, sign_no_creation_date TIMESTAMP, invoice_no VARCHAR, issue_date TIMESTAMP, invoice_to_tax_no VARCHAR, accounting_tax_flag INTEGER, company_id BIGINT, salesperson_id BIGINT, status INTEGER, china_cti_id BIGINT, reference_no VARCHAR, export_status VARCHAR, applicant_id BIGINT, template_id BIGINT, approver_id BIGINT, sender_id BIGINT, sign_id BIGINT, apply_date TIMESTAMP, approve_date TIMESTAMP, send_date TIMESTAMP, sign_date TIMESTAMP, acceptance_contact_person_id BIGINT, customer_receive_person VARCHAR, customer_receive_date TIMESTAMP, apply_sys_time TIMESTAMP, approve_sys_time TIMESTAMP, send_sys_time TIMESTAMP, sign_sys_time TIMESTAMP, vat_amount DECIMAL(22,4), total_amount DECIMAL(22,4), credit_amount DECIMAL(22,4), applied_amount DECIMAL(22,4), net_amount DECIMAL(22,4), matched_amount DECIMAL(22,4), balance DECIMAL(22,4), contract_billed_amount DECIMAL(22,4), china_tax_rate DECIMAL(38,18), currency_id BIGINT, customer_id BIGINT, sign_flag VARCHAR, reject_reason VARCHAR, feedback_info VARCHAR, workflow_id BIGINT, manager_id BIGINT, account_id BIGINT, approve_remark VARCHAR, manager_accredit_no VARCHAR, remark VARCHAR, account_accredit_no VARCHAR, invoice_to_customer_name VARCHAR, invoice_to_customer_address VARCHAR, service_invoice_flag VARCHAR, apply_support_doc_sys_name VARCHAR, apply_support_doc_org_name VARCHAR, apply_doc_dm_sys_name VARCHAR, send_doc_dm_sysname VARCHAR, support_doc_upload_date TIMESTAMP, paying_customer_id BIGINT, paying_customer_address_id BIGINT, paying_customer_address VARCHAR, shipto_customer_name VARCHAR, shipto_customer_id BIGINT, shipto_customer_address_id BIGINT, shipto_tax_no1 VARCHAR, shipto_tax_no2 VARCHAR, shipto_customer_address VARCHAR, billto_customer_id BIGINT, billto_customer_address_id BIGINT, billto_tax_no1 VARCHAR, billto_tax_no2 VARCHAR, soldto_customer_id BIGINT, mailing_info VARCHAR, waybill_no VARCHAR, comments VARCHAR, office_receive_date TIMESTAMP, office_receive_person BIGINT, tax_invoice_date TIMESTAMP, invoice_required_by VARCHAR, invoice_required_name VARCHAR, special_invoice_flag INTEGER, group_item_flag VARCHAR, export_tax_flag VARCHAR, customer_id_bak BIGINT, native_tax_no VARCHAR, credit_terms_days DECIMAL(38,10), exchange_rate_type INTEGER, date_range_id BIGINT, final_approve_time TIMESTAMP, final_approve_id BIGINT, final_approve_date TIMESTAMP, final_reject_reason VARCHAR, final_approve_remark VARCHAR, adjustment_amount DECIMAL(22,4), send_remark VARCHAR, application_type_id BIGINT, exchange_rate DECIMAL(22,10), credit_reason_id BIGINT, invoice_file_name VARCHAR, special_currency_code VARCHAR, receipt_info VARCHAR, tax_code VARCHAR, send_doc_sysname VARCHAR, send_doc_name VARCHAR, send_doc_receive_date TIMESTAMP, sign_copy_to VARCHAR, print_line_flag VARCHAR, binding_date VARCHAR, payment_terms VARCHAR, bankaccount_id BIGINT, india_invoice_type_id BIGINT, related_gl_date TIMESTAMP, export_erp_error VARCHAR, act_no VARCHAR, edoc_code VARCHAR, send_method_type VARCHAR, company_address BIGINT, batch_no VARCHAR, batch_approve_error_msg VARCHAR, related_invoice_no VARCHAR, related_milestonepoint_date TIMESTAMP, invoice_type INTEGER, export_iexcel_batch_no VARCHAR, export_iexcel_guid VARCHAR, change_no VARCHAR, amount_spell VARCHAR, gl_date TIMESTAMP, tax_adjust_date TIMESTAMP, tax_reporting_date TIMESTAMP, milestone_point_date TIMESTAMP, edoc_code_no_sig VARCHAR, attribute_context BIGINT, attribute1 VARCHAR, attribute2 VARCHAR, attribute3 VARCHAR, attribute4 VARCHAR, attribute5 VARCHAR, attribute6 VARCHAR, attribute7 VARCHAR, attribute8 VARCHAR, attribute9 VARCHAR, attribute10 VARCHAR, attribute11 VARCHAR, attribute12 VARCHAR, attribute13 VARCHAR, attribute14 VARCHAR, attribute15 VARCHAR, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, iexcel_guid VARCHAR, rq_doc VARCHAR, application_code VARCHAR, send_to_email VARCHAR, send_cc_email VARCHAR, source INTEGER, invoice_to_customer_id BIGINT, invoice_scenario VARCHAR, ship_to_customer_state VARCHAR, b2b_status INTEGER, b2b_error_message VARCHAR, receiver VARCHAR, phone VARCHAR, pre_inv_id BIGINT, pre_tax_no VARCHAR, pre_invoice_no VARCHAR, tax_register_no VARCHAR, bank_name VARCHAR, account_no VARCHAR, contact_name VARCHAR, contact_phone VARCHAR, bank_address VARCHAR, average_taxpayerflag VARCHAR, ibilling_support_doc_sys_name VARCHAR, ibilling_support_doc_org_name VARCHAR, taxable_value DECIMAL(38,18), sign_type INTEGER, cust_contact_person VARCHAR, position VARCHAR, sign_remark VARCHAR, acceptance_status INTEGER, acceptance_date TIMESTAMP, dispute_reason_id BIGINT, acceptance_remarks VARCHAR, sign_support_doc_org_name VARCHAR, sign_support_doc_sys_name VARCHAR, accept_support_doc_org_name VARCHAR, accept_support_doc_sys_name VARCHAR, booked VARCHAR, booker_id BIGINT, book_date TIMESTAMP, booked_remark VARCHAR, issue_mode VARCHAR, whether_calculate_tax VARCHAR, receivable_application_id BIGINT, receipt_apply_amount DECIMAL(22,4), prepayment_type INTEGER, reference_receipt_no VARCHAR, orinal_invoice_id BIGINT, export_batch VARCHAR, credit_reason_remark VARCHAR, tax_id BIGINT, installment_allocation_mode INTEGER, tax_loss_flag VARCHAR, tax_loss VARCHAR, special_invoice_detail VARCHAR, adjust_reason VARCHAR, acceptance_doc_sys_name VARCHAR, acceptance_doc_org_name VARCHAR, acceptance_doc_upl_id BIGINT, createacceptanceby VARCHAR, createacceptanceuserid BIGINT, edocversion VARCHAR, inv_invoice_id BIGINT, batch_operate_type INTEGER, terminal_delivery_unit VARCHAR, ref_commercial_invoice_no VARCHAR, no_need_approval VARCHAR, acceptance_doc_upload_date TIMESTAMP, amount_check_method VARCHAR, red_invoice_bill_no VARCHAR, is_ptn_send_b2b VARCHAR, specific_feature_type VARCHAR, sub_credit_reason_id BIGINT, digital_pdf_edoc_id VARCHAR, digital_xml_edoc_id VARCHAR, digital_ofd_edoc_id VARCHAR, digital_file_receive_time TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_pu (payment_unit_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, currency_id BIGINT, bank_id BIGINT, contract_id BIGINT, contract_number VARCHAR, is_pre_payment VARCHAR, pre_payment_date TIMESTAMP, contract_netamount DECIMAL(22,3), contract_vat DECIMAL(22,3), contract_amount DECIMAL(22,3), discount_amount DECIMAL(22,3), amount_modify_reason_id BIGINT, remarks VARCHAR, payment_sch_desc VARCHAR, payment_method DECIMAL(38,18), trade_terms DECIMAL(38,18), delivery_place DECIMAL(38,18), cir_payment_unit_id BIGINT, payment_unit_number VARCHAR, payment_unit_name VARCHAR, sales_type INTEGER, term_type INTEGER, term_type_code VARCHAR, status INTEGER, vatschedule_status INTEGER, bill_to_customer_id BIGINT, bs_status INTEGER, payment_term_id BIGINT, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, equipment_amount DECIMAL(22,3), service_amount DECIMAL(22,3), bs_upload_doc_sys_name VARCHAR, bs_upload_doc_org_name VARCHAR, service_vat_amount DECIMAL(22,3), equipment_vat_amount DECIMAL(22,3), service_net_amount DECIMAL(22,3), equipment_net_amount DECIMAL(22,3), service_vat_rate DECIMAL(5,4), prepayment_in_full_manual_flag VARCHAR, manual_flag_remark VARCHAR, prepayment_manual_date TIMESTAMP, equipment_vat_rate DECIMAL(5,4), software_recurring_amount DECIMAL(22,4), software_recurring_net_amount DECIMAL(22,4), software_recurring_vat_rate DECIMAL(5,4), software_recurring_vat DECIMAL(22,4), sfw_perp_license_amount DECIMAL(22,4), sfw_perp_lice_inc_vat_flag VARCHAR, sfw_perp_lice_vat_rate DECIMAL(5,4), sfw_perp_license_vat DECIMAL(22,4), sfw_perp_lice_net_amount DECIMAL(22,4), financing_flag VARCHAR, financing_amount DECIMAL(22,3), financing_resource VARCHAR, manual_return_amount DECIMAL(22,3), return_date TIMESTAMP, financing_due_date TIMESTAMP, financing_overdue_days DECIMAL(38,10), financing_expenses DECIMAL(38,18), financing_rate DECIMAL(38,18), financing_remark VARCHAR, financing_date TIMESTAMP, equipment_split_amount DECIMAL(22,4), sfw_lice_split_amount DECIMAL(22,4), ras_update_status INTEGER, full_shipment VARCHAR, full_config VARCHAR, tax_bill_to BIGINT, tax_ship_to BIGINT, tax_product_category VARCHAR, tax_rate_code VARCHAR, rate_scenario VARCHAR, tax_before_reform DECIMAL(24,3), need_preship_payment VARCHAR, need_advance_payment VARCHAR, before_shipment_in_full_manual VARCHAR, before_shipment_manual_date TIMESTAMP, pu_delivery_date TIMESTAMP, sofulfill_flag VARCHAR, last_fulfill_date TIMESTAMP, pod_document_flag VARCHAR, pod_approved_date TIMESTAMP, pu_non_delivery_reason VARCHAR, china_net_flag VARCHAR, pu_delivery_flag VARCHAR, billing_name VARCHAR, collection_entity_code VARCHAR, origin_object_id VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_pu (payment_unit_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, currency_id BIGINT, bank_id BIGINT, contract_id BIGINT, contract_number VARCHAR, is_pre_payment VARCHAR, pre_payment_date TIMESTAMP, contract_netamount DECIMAL(22,3), contract_vat DECIMAL(22,3), contract_amount DECIMAL(22,3), discount_amount DECIMAL(22,3), amount_modify_reason_id BIGINT, remarks VARCHAR, payment_sch_desc VARCHAR, payment_method DECIMAL(38,18), trade_terms DECIMAL(38,18), delivery_place DECIMAL(38,18), cir_payment_unit_id BIGINT, payment_unit_number VARCHAR, payment_unit_name VARCHAR, sales_type INTEGER, term_type INTEGER, term_type_code VARCHAR, status INTEGER, vatschedule_status INTEGER, bill_to_customer_id BIGINT, bs_status INTEGER, payment_term_id BIGINT, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, equipment_amount DECIMAL(22,3), service_amount DECIMAL(22,3), bs_upload_doc_sys_name VARCHAR, bs_upload_doc_org_name VARCHAR, service_vat_amount DECIMAL(22,3), equipment_vat_amount DECIMAL(22,3), service_net_amount DECIMAL(22,3), equipment_net_amount DECIMAL(22,3), service_vat_rate DECIMAL(5,4), prepayment_in_full_manual_flag VARCHAR, manual_flag_remark VARCHAR, prepayment_manual_date TIMESTAMP, equipment_vat_rate DECIMAL(5,4), software_recurring_amount DECIMAL(22,4), software_recurring_net_amount DECIMAL(22,4), software_recurring_vat_rate DECIMAL(5,4), software_recurring_vat DECIMAL(22,4), sfw_perp_license_amount DECIMAL(22,4), sfw_perp_lice_inc_vat_flag VARCHAR, sfw_perp_lice_vat_rate DECIMAL(5,4), sfw_perp_license_vat DECIMAL(22,4), sfw_perp_lice_net_amount DECIMAL(22,4), financing_flag VARCHAR, financing_amount DECIMAL(22,3), financing_resource VARCHAR, manual_return_amount DECIMAL(22,3), return_date TIMESTAMP, financing_due_date TIMESTAMP, financing_overdue_days DECIMAL(38,10), financing_expenses DECIMAL(38,18), financing_rate DECIMAL(38,18), financing_remark VARCHAR, financing_date TIMESTAMP, equipment_split_amount DECIMAL(22,4), sfw_lice_split_amount DECIMAL(22,4), ras_update_status INTEGER, full_shipment VARCHAR, full_config VARCHAR, tax_bill_to BIGINT, tax_ship_to BIGINT, tax_product_category VARCHAR, tax_rate_code VARCHAR, rate_scenario VARCHAR, tax_before_reform DECIMAL(24,3), need_preship_payment VARCHAR, need_advance_payment VARCHAR, before_shipment_in_full_manual VARCHAR, before_shipment_manual_date TIMESTAMP, pu_delivery_date TIMESTAMP, sofulfill_flag VARCHAR, last_fulfill_date TIMESTAMP, pod_document_flag VARCHAR, pod_approved_date TIMESTAMP, pu_non_delivery_reason VARCHAR, china_net_flag VARCHAR, pu_delivery_flag VARCHAR, billing_name VARCHAR, collection_entity_code VARCHAR, origin_object_id VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_inv (invoice_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, balance_amount DECIMAL(22,3), sys_invoice_no VARCHAR, invoice_no VARCHAR, invoice_ref_no VARCHAR, contract_text_amount VARCHAR, issue_date TIMESTAMP, gl_date TIMESTAMP, customer_invoice_id BIGINT, reference_date TIMESTAMP, template_id BIGINT, export_tax_flag VARCHAR, china_invoice_type_id BIGINT, customer_signing_person VARCHAR, office_signing_person VARCHAR, customer_signing_date TIMESTAMP, office_signing_date TIMESTAMP, invoice_to_customer_name VARCHAR, customer_delay_reasons VARCHAR, bill_to_email VARCHAR, include_email_annex_flag INTEGER, cross_reference VARCHAR, auto_tax_invoice VARCHAR, remark VARCHAR, comments VARCHAR, customer_pono VARCHAR, edoc_code VARCHAR, cal_amt_flag INTEGER, mailing_info VARCHAR, tax_id BIGINT, tax_rate DECIMAL(19,3), tax_rate_code VARCHAR, tax_description VARCHAR, tax_amount_1 DECIMAL(22,3), tax_amount_2 DECIMAL(22,3), tax_amount_3 DECIMAL(22,3), vat_amount DECIMAL(22,3), ship_to_state_id BIGINT, tax_approver_date TIMESTAMP, company_manager VARCHAR, manager_accredit_no VARCHAR, main_account VARCHAR, account_accredit_no VARCHAR, status INTEGER, contract_no VARCHAR, contact_phone VARCHAR, tax_registration_no VARCHAR, customer_po_no VARCHAR, bank_account VARCHAR, bank_name VARCHAR, bank_address VARCHAR, native_tax_no VARCHAR, bank_account_id BIGINT, currency_id BIGINT, invoice_category_id BIGINT, invoice_type_id BIGINT, amount_spell VARCHAR, bill_to_address_id BIGINT, bill_to_address VARCHAR, bill_to_attn VARCHAR, ship_to_address_id BIGINT, ship_to_address VARCHAR, ship_to_state VARCHAR, ship_to_street VARCHAR, ship_date TIMESTAMP, net_amount DECIMAL(22,3), total_amount DECIMAL(22,3), adjust_amount DECIMAL(22,3), applied_amount DECIMAL(22,3), credit_amount DECIMAL(22,3), match_amount DECIMAL(22,3), no_credit_amount DECIMAL(22,3), wht_amount DECIMAL(22,3), contact_person_name VARCHAR, contact_person_email VARCHAR, contact_person_fax VARCHAR, contact_person_tel VARCHAR, debit_memo_type VARCHAR, apply_support_doc_sys_name VARCHAR, apply_support_doc_org_name VARCHAR, support_doc_link VARCHAR, support_doc_upload_date TIMESTAMP, approve_support_doc_sys_name VARCHAR, approve_support_doc_org_name VARCHAR, no_seal_invoice_file_name VARCHAR, seal_invoice_file_name VARCHAR, lc_payment_flag VARCHAR, lc_no VARCHAR, mailing_method VARCHAR, send_to_email VARCHAR, send_cc_email VARCHAR, reject_reason VARCHAR, issue_tax_invoice_flag VARCHAR, applicant_id BIGINT, apply_date TIMESTAMP, apply_sys_time TIMESTAMP, apply_remark VARCHAR, approver_id BIGINT, approve_date TIMESTAMP, approve_sys_time TIMESTAMP, approve_remark VARCHAR, sender_id BIGINT, send_date TIMESTAMP, send_sys_time TIMESTAMP, send_remark VARCHAR, dhl_no VARCHAR, notice_delay_days DECIMAL(38,10), sign_id BIGINT, sign_date TIMESTAMP, sign_sys_time TIMESTAMP, sign_remark VARCHAR, acceptance_no VARCHAR, sign_type INTEGER, customer_receive_date TIMESTAMP, tax_approver_id BIGINT, tax_approve_remark VARCHAR, delay_reason_detail VARCHAR, batch_no VARCHAR, cc_staff_id BIGINT, erp_trx_id BIGINT, invoice_gross_amount DECIMAL(38,10), work_flow_id BIGINT, require_no VARCHAR, require_name VARCHAR, customer_register_date TIMESTAMP, customer_return_date TIMESTAMP, customer_return_to_be_date TIMESTAMP, pod_date TIMESTAMP, re_send_date TIMESTAMP, attribute_context VARCHAR, attribute1 VARCHAR, attribute2 VARCHAR, attribute3 VARCHAR, attribute4 VARCHAR, attribute5 VARCHAR, attribute6 VARCHAR, attribute7 VARCHAR, attribute8 VARCHAR, attribute9 VARCHAR, attribute10 VARCHAR, attribute11 VARCHAR, attribute12 VARCHAR, attribute13 VARCHAR, attribute14 VARCHAR, attribute15 VARCHAR, bill_to_address_id_bak BIGINT, customer_id_bak BIGINT, reconciliation_status VARCHAR, erp_payment_terms_id BIGINT, send_invoice_file VARCHAR, mailing_address VARCHAR, cc_mailing_address VARCHAR, dispute_reason_id BIGINT, dm_next_operator_id BIGINT, delay_reason_id BIGINT, attachment_flag INTEGER, acceptance_status INTEGER, special_invoice_flag INTEGER, special_invoice_remark VARCHAR, export_iexcel_batch_no VARCHAR, export_iexcel_guid VARCHAR, tax_invoice_no VARCHAR, tax_invoice_book_no VARCHAR, tax_invoice_date TIMESTAMP, acceptance_contract_person_id BIGINT, send_support_doc_org_name VARCHAR, send_support_doc_sys_name VARCHAR, edoc_code_no_sig VARCHAR, erp_source VARCHAR, invoice_to_customer_id BIGINT, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, iexcel_guid VARCHAR, rq_doc VARCHAR, whether_calculate_tax VARCHAR, transaction_context VARCHAR, final_approver_id BIGINT, final_approve_date TIMESTAMP, final_approve_remark VARCHAR, final_approve_sys_time TIMESTAMP, application_code VARCHAR, sign_support_doc_org_name VARCHAR, sign_support_doc_sys_name VARCHAR, cust_contact_person VARCHAR, position VARCHAR, good_list_doc_org_name VARCHAR, good_list_doc_sys_name VARCHAR, adjust_reason VARCHAR, credit_date TIMESTAMP, invoice_to_customer_address VARCHAR, summary_no VARCHAR, applied_wht_amount DECIMAL(22,3), dispute_detail VARCHAR, acceptance_date TIMESTAMP, b2b_status INTEGER, b2b_error_message VARCHAR, terminal_delivery_unit VARCHAR, accept_support_doc_org_name VARCHAR, accept_support_doc_sys_name VARCHAR, acceptance_due_date TIMESTAMP, acceptance_remarks VARCHAR, final_approve_flag VARCHAR, inv_line_no VARCHAR, acceptance_doc_sys_name VARCHAR, acceptance_doc_org_name VARCHAR, acceptance_doc_upl_id BIGINT, accept_by VARCHAR, rate_to_erp DECIMAL(19,3), exchange_amount DECIMAL(19,3), persian_date VARCHAR, accepted_sys_time TIMESTAMP, batch_operate_type INTEGER, sign_by VARCHAR, no_need_approval VARCHAR, exchange_rate_type VARCHAR, user_exchange_rate DECIMAL(16,6), trx_type VARCHAR, accounting_team VARCHAR, store_group_name VARCHAR, org_id BIGINT, store_group_code VARCHAR, software VARCHAR, software_flag VARCHAR, send_to_email_external_flag VARCHAR, send_by VARCHAR, bg_type INTEGER, special_invoice_type VARCHAR, local_tax_invoice_no VARCHAR, bill_to_customer_location VARCHAR, business_code VARCHAR, capacity_expansion_contract_no VARCHAR, co_number VARCHAR, consignor_address VARCHAR, customs_decl_no VARCHAR, du_id VARCHAR, erp_order_type_id BIGINT, extra_tax_amount DECIMAL(38,10), fob_point_code VARCHAR, freight_accessory_expense DECIMAL(38,18), gross_weight DECIMAL(38,18), insurance_accessory DECIMAL(38,18), invoice_series VARCHAR, license_plate VARCHAR, net_weight DECIMAL(38,18), order_comment VARCHAR, ordered_date TIMESTAMP, other_accessory_expenses DECIMAL(38,18), send_senior_status VARCHAR, ship_from_city VARCHAR, ship_from_country VARCHAR, ship_from_org_code VARCHAR, ship_to_customer_id BIGINT, ship_to_customer_location VARCHAR, site_name VARCHAR, source_invoice_id BIGINT, source_system_code VARCHAR, source_trx_id BIGINT, tax_reporting_date VARCHAR, transaction_status VARCHAR, volume_quantity DECIMAL(24,10), volume_type VARCHAR, bill_to_customer_contact_id BIGINT, bill_to_customer_location_id BIGINT, cancel_flag VARCHAR, currency VARCHAR, customer_contact_id BIGINT, customer_po_number VARCHAR, customer_site VARCHAR, erp_order_source_id BIGINT, erp_org_id DECIMAL(38,0), erp_ship_from_org_id DECIMAL(38,0), erp_sold_to_org_id DECIMAL(38,0), invoice_first_flag VARCHAR, invoice_source VARCHAR, invoice_to_contact_id DECIMAL(38,0), invoice_to_org_id DECIMAL(38,0), order_creation_date TIMESTAMP, order_header_id DECIMAL(38,0), order_number VARCHAR, penalty_amount DECIMAL(38,10), remit_to_address VARCHAR, ship_customer_id BIGINT, ship_from_state VARCHAR, ship_to_contact_id DECIMAL(38,0), ship_to_customer_contact_id BIGINT, ship_to_customer_location_id BIGINT, ship_to_org_id DECIMAL(38,0), so_number VARCHAR, solution_sales_order VARCHAR, source_invoice_no VARCHAR, sourcetrxid BIGINT, territory BIGINT, total_gross_weight DECIMAL(38,18), total_net_weight DECIMAL(38,18), volume_number VARCHAR, unique_key VARCHAR, volume DECIMAL(24,10), specific_feature_type VARCHAR, digital_pdf_edoc_id VARCHAR, digital_xml_edoc_id VARCHAR, digital_ofd_edoc_id VARCHAR, invoice_usage VARCHAR, mail_delivered_flag VARCHAR, red_invoice_bill_no VARCHAR, digital_invoice_status VARCHAR, edoc_qr_flag VARCHAR, parallel_flag VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_inv (invoice_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, balance_amount DECIMAL(22,3), sys_invoice_no VARCHAR, invoice_no VARCHAR, invoice_ref_no VARCHAR, contract_text_amount VARCHAR, issue_date TIMESTAMP, gl_date TIMESTAMP, customer_invoice_id BIGINT, reference_date TIMESTAMP, template_id BIGINT, export_tax_flag VARCHAR, china_invoice_type_id BIGINT, customer_signing_person VARCHAR, office_signing_person VARCHAR, customer_signing_date TIMESTAMP, office_signing_date TIMESTAMP, invoice_to_customer_name VARCHAR, customer_delay_reasons VARCHAR, bill_to_email VARCHAR, include_email_annex_flag INTEGER, cross_reference VARCHAR, auto_tax_invoice VARCHAR, remark VARCHAR, comments VARCHAR, customer_pono VARCHAR, edoc_code VARCHAR, cal_amt_flag INTEGER, mailing_info VARCHAR, tax_id BIGINT, tax_rate DECIMAL(19,3), tax_rate_code VARCHAR, tax_description VARCHAR, tax_amount_1 DECIMAL(22,3), tax_amount_2 DECIMAL(22,3), tax_amount_3 DECIMAL(22,3), vat_amount DECIMAL(22,3), ship_to_state_id BIGINT, tax_approver_date TIMESTAMP, company_manager VARCHAR, manager_accredit_no VARCHAR, main_account VARCHAR, account_accredit_no VARCHAR, status INTEGER, contract_no VARCHAR, contact_phone VARCHAR, tax_registration_no VARCHAR, customer_po_no VARCHAR, bank_account VARCHAR, bank_name VARCHAR, bank_address VARCHAR, native_tax_no VARCHAR, bank_account_id BIGINT, currency_id BIGINT, invoice_category_id BIGINT, invoice_type_id BIGINT, amount_spell VARCHAR, bill_to_address_id BIGINT, bill_to_address VARCHAR, bill_to_attn VARCHAR, ship_to_address_id BIGINT, ship_to_address VARCHAR, ship_to_state VARCHAR, ship_to_street VARCHAR, ship_date TIMESTAMP, net_amount DECIMAL(22,3), total_amount DECIMAL(22,3), adjust_amount DECIMAL(22,3), applied_amount DECIMAL(22,3), credit_amount DECIMAL(22,3), match_amount DECIMAL(22,3), no_credit_amount DECIMAL(22,3), wht_amount DECIMAL(22,3), contact_person_name VARCHAR, contact_person_email VARCHAR, contact_person_fax VARCHAR, contact_person_tel VARCHAR, debit_memo_type VARCHAR, apply_support_doc_sys_name VARCHAR, apply_support_doc_org_name VARCHAR, support_doc_link VARCHAR, support_doc_upload_date TIMESTAMP, approve_support_doc_sys_name VARCHAR, approve_support_doc_org_name VARCHAR, no_seal_invoice_file_name VARCHAR, seal_invoice_file_name VARCHAR, lc_payment_flag VARCHAR, lc_no VARCHAR, mailing_method VARCHAR, send_to_email VARCHAR, send_cc_email VARCHAR, reject_reason VARCHAR, issue_tax_invoice_flag VARCHAR, applicant_id BIGINT, apply_date TIMESTAMP, apply_sys_time TIMESTAMP, apply_remark VARCHAR, approver_id BIGINT, approve_date TIMESTAMP, approve_sys_time TIMESTAMP, approve_remark VARCHAR, sender_id BIGINT, send_date TIMESTAMP, send_sys_time TIMESTAMP, send_remark VARCHAR, dhl_no VARCHAR, notice_delay_days DECIMAL(38,10), sign_id BIGINT, sign_date TIMESTAMP, sign_sys_time TIMESTAMP, sign_remark VARCHAR, acceptance_no VARCHAR, sign_type INTEGER, customer_receive_date TIMESTAMP, tax_approver_id BIGINT, tax_approve_remark VARCHAR, delay_reason_detail VARCHAR, batch_no VARCHAR, cc_staff_id BIGINT, erp_trx_id BIGINT, invoice_gross_amount DECIMAL(38,10), work_flow_id BIGINT, require_no VARCHAR, require_name VARCHAR, customer_register_date TIMESTAMP, customer_return_date TIMESTAMP, customer_return_to_be_date TIMESTAMP, pod_date TIMESTAMP, re_send_date TIMESTAMP, attribute_context VARCHAR, attribute1 VARCHAR, attribute2 VARCHAR, attribute3 VARCHAR, attribute4 VARCHAR, attribute5 VARCHAR, attribute6 VARCHAR, attribute7 VARCHAR, attribute8 VARCHAR, attribute9 VARCHAR, attribute10 VARCHAR, attribute11 VARCHAR, attribute12 VARCHAR, attribute13 VARCHAR, attribute14 VARCHAR, attribute15 VARCHAR, bill_to_address_id_bak BIGINT, customer_id_bak BIGINT, reconciliation_status VARCHAR, erp_payment_terms_id BIGINT, send_invoice_file VARCHAR, mailing_address VARCHAR, cc_mailing_address VARCHAR, dispute_reason_id BIGINT, dm_next_operator_id BIGINT, delay_reason_id BIGINT, attachment_flag INTEGER, acceptance_status INTEGER, special_invoice_flag INTEGER, special_invoice_remark VARCHAR, export_iexcel_batch_no VARCHAR, export_iexcel_guid VARCHAR, tax_invoice_no VARCHAR, tax_invoice_book_no VARCHAR, tax_invoice_date TIMESTAMP, acceptance_contract_person_id BIGINT, send_support_doc_org_name VARCHAR, send_support_doc_sys_name VARCHAR, edoc_code_no_sig VARCHAR, erp_source VARCHAR, invoice_to_customer_id BIGINT, version INTEGER, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, description VARCHAR, iexcel_guid VARCHAR, rq_doc VARCHAR, whether_calculate_tax VARCHAR, transaction_context VARCHAR, final_approver_id BIGINT, final_approve_date TIMESTAMP, final_approve_remark VARCHAR, final_approve_sys_time TIMESTAMP, application_code VARCHAR, sign_support_doc_org_name VARCHAR, sign_support_doc_sys_name VARCHAR, cust_contact_person VARCHAR, position VARCHAR, good_list_doc_org_name VARCHAR, good_list_doc_sys_name VARCHAR, adjust_reason VARCHAR, credit_date TIMESTAMP, invoice_to_customer_address VARCHAR, summary_no VARCHAR, applied_wht_amount DECIMAL(22,3), dispute_detail VARCHAR, acceptance_date TIMESTAMP, b2b_status INTEGER, b2b_error_message VARCHAR, terminal_delivery_unit VARCHAR, accept_support_doc_org_name VARCHAR, accept_support_doc_sys_name VARCHAR, acceptance_due_date TIMESTAMP, acceptance_remarks VARCHAR, final_approve_flag VARCHAR, inv_line_no VARCHAR, acceptance_doc_sys_name VARCHAR, acceptance_doc_org_name VARCHAR, acceptance_doc_upl_id BIGINT, accept_by VARCHAR, rate_to_erp DECIMAL(19,3), exchange_amount DECIMAL(19,3), persian_date VARCHAR, accepted_sys_time TIMESTAMP, batch_operate_type INTEGER, sign_by VARCHAR, no_need_approval VARCHAR, exchange_rate_type VARCHAR, user_exchange_rate DECIMAL(16,6), trx_type VARCHAR, accounting_team VARCHAR, store_group_name VARCHAR, org_id BIGINT, store_group_code VARCHAR, software VARCHAR, software_flag VARCHAR, send_to_email_external_flag VARCHAR, send_by VARCHAR, bg_type INTEGER, special_invoice_type VARCHAR, local_tax_invoice_no VARCHAR, bill_to_customer_location VARCHAR, business_code VARCHAR, capacity_expansion_contract_no VARCHAR, co_number VARCHAR, consignor_address VARCHAR, customs_decl_no VARCHAR, du_id VARCHAR, erp_order_type_id BIGINT, extra_tax_amount DECIMAL(38,10), fob_point_code VARCHAR, freight_accessory_expense DECIMAL(38,18), gross_weight DECIMAL(38,18), insurance_accessory DECIMAL(38,18), invoice_series VARCHAR, license_plate VARCHAR, net_weight DECIMAL(38,18), order_comment VARCHAR, ordered_date TIMESTAMP, other_accessory_expenses DECIMAL(38,18), send_senior_status VARCHAR, ship_from_city VARCHAR, ship_from_country VARCHAR, ship_from_org_code VARCHAR, ship_to_customer_id BIGINT, ship_to_customer_location VARCHAR, site_name VARCHAR, source_invoice_id BIGINT, source_system_code VARCHAR, source_trx_id BIGINT, tax_reporting_date VARCHAR, transaction_status VARCHAR, volume_quantity DECIMAL(24,10), volume_type VARCHAR, bill_to_customer_contact_id BIGINT, bill_to_customer_location_id BIGINT, cancel_flag VARCHAR, currency VARCHAR, customer_contact_id BIGINT, customer_po_number VARCHAR, customer_site VARCHAR, erp_order_source_id BIGINT, erp_org_id DECIMAL(38,0), erp_ship_from_org_id DECIMAL(38,0), erp_sold_to_org_id DECIMAL(38,0), invoice_first_flag VARCHAR, invoice_source VARCHAR, invoice_to_contact_id DECIMAL(38,0), invoice_to_org_id DECIMAL(38,0), order_creation_date TIMESTAMP, order_header_id DECIMAL(38,0), order_number VARCHAR, penalty_amount DECIMAL(38,10), remit_to_address VARCHAR, ship_customer_id BIGINT, ship_from_state VARCHAR, ship_to_contact_id DECIMAL(38,0), ship_to_customer_contact_id BIGINT, ship_to_customer_location_id BIGINT, ship_to_org_id DECIMAL(38,0), so_number VARCHAR, solution_sales_order VARCHAR, source_invoice_no VARCHAR, sourcetrxid BIGINT, territory BIGINT, total_gross_weight DECIMAL(38,18), total_net_weight DECIMAL(38,18), volume_number VARCHAR, unique_key VARCHAR, volume DECIMAL(24,10), specific_feature_type VARCHAR, digital_pdf_edoc_id VARCHAR, digital_xml_edoc_id VARCHAR, digital_ofd_edoc_id VARCHAR, invoice_usage VARCHAR, mail_delivered_flag VARCHAR, red_invoice_bill_no VARCHAR, digital_invoice_status VARCHAR, edoc_qr_flag VARCHAR, parallel_flag VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_inst (application_inst_id BIGINT, operator_application_id BIGINT, contract_id BIGINT, payment_unit_id BIGINT, total_amount DECIMAL(22,3), contract_amount DECIMAL(22,3), unbilled_amount DECIMAL(22,3), billed_amount DECIMAL(22,3), invoiced_amount DECIMAL(22,3), version INTEGER, creation_date TIMESTAMP, created_by BIGINT, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, pu_tax_rate DECIMAL(5,4), amount_check_method VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_inst (application_inst_id BIGINT, operator_application_id BIGINT, contract_id BIGINT, payment_unit_id BIGINT, total_amount DECIMAL(22,3), contract_amount DECIMAL(22,3), unbilled_amount DECIMAL(22,3), billed_amount DECIMAL(22,3), invoiced_amount DECIMAL(22,3), version INTEGER, creation_date TIMESTAMP, created_by BIGINT, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, pu_tax_rate DECIMAL(5,4), amount_check_method VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_app (operator_application_id BIGINT, application_code VARCHAR, contract_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, application_type INTEGER, currency_id BIGINT, accounting_tax_flag INTEGER, goods_list_org_doc VARCHAR, goods_list_sys_doc VARCHAR, total_amount DECIMAL(22,3), tax_invoice_customer_name VARCHAR, china_invoice_type_id BIGINT, installment_allocation_mode INTEGER, applicant_id BIGINT, applicant_time TIMESTAMP, special_invoice_eflow_link VARCHAR, mailing_info VARCHAR, apply_remark VARCHAR, is_discount VARCHAR, status INTEGER, reject_reason VARCHAR, approve_id BIGINT, approve_time TIMESTAMP, version INTEGER, creation_date TIMESTAMP, created_by BIGINT, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, remark VARCHAR, submit_by BIGINT, upload_result_id BIGINT, billing_approve_id BIGINT, cc_email VARCHAR, tax_id BIGINT, tax_rate_code VARCHAR, tax_description VARCHAR, tax_amount_1 DECIMAL(22,3), net_amount DECIMAL(22,3), receiver VARCHAR, phone VARCHAR, mailing_method VARCHAR, tax_invoice_customer_id BIGINT, unit_hide_flag VARCHAR, split_flag VARCHAR, terminal_delivery_unit VARCHAR, send_approve_id BIGINT, credit_invoice_type INTEGER, opt_credit_reason_id BIGINT, opt_credit_reason VARCHAR, reopens_immediately VARCHAR, tax_loss_flag VARCHAR, tax_loss VARCHAR, cfo_approve_id BIGINT, scarlet_letter_notification_no VARCHAR, dhl_no VARCHAR, approve_path DECIMAL(38,18), pref_flag VARCHAR, first_approve_id BIGINT, first_mile_tri_date TIMESTAMP, org_tax_invoice_no VARCHAR, tax_rate DECIMAL(38,18), tracker_id BIGINT, issue_mode VARCHAR, source VARCHAR, is_use_workflow VARCHAR, work_flow_id BIGINT, amount_check_method VARCHAR, no_need_approval VARCHAR, specific_feature_type VARCHAR, sub_credit_reason_id BIGINT, application_type_id BIGINT, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_app (operator_application_id BIGINT, application_code VARCHAR, contract_id BIGINT, salesperson_id BIGINT, company_id BIGINT, customer_id BIGINT, application_type INTEGER, currency_id BIGINT, accounting_tax_flag INTEGER, goods_list_org_doc VARCHAR, goods_list_sys_doc VARCHAR, total_amount DECIMAL(22,3), tax_invoice_customer_name VARCHAR, china_invoice_type_id BIGINT, installment_allocation_mode INTEGER, applicant_id BIGINT, applicant_time TIMESTAMP, special_invoice_eflow_link VARCHAR, mailing_info VARCHAR, apply_remark VARCHAR, is_discount VARCHAR, status INTEGER, reject_reason VARCHAR, approve_id BIGINT, approve_time TIMESTAMP, version INTEGER, creation_date TIMESTAMP, created_by BIGINT, last_update_date TIMESTAMP, last_updated_by BIGINT, description VARCHAR, remark VARCHAR, submit_by BIGINT, upload_result_id BIGINT, billing_approve_id BIGINT, cc_email VARCHAR, tax_id BIGINT, tax_rate_code VARCHAR, tax_description VARCHAR, tax_amount_1 DECIMAL(22,3), net_amount DECIMAL(22,3), receiver VARCHAR, phone VARCHAR, mailing_method VARCHAR, tax_invoice_customer_id BIGINT, unit_hide_flag VARCHAR, split_flag VARCHAR, terminal_delivery_unit VARCHAR, send_approve_id BIGINT, credit_invoice_type INTEGER, opt_credit_reason_id BIGINT, opt_credit_reason VARCHAR, reopens_immediately VARCHAR, tax_loss_flag VARCHAR, tax_loss VARCHAR, cfo_approve_id BIGINT, scarlet_letter_notification_no VARCHAR, dhl_no VARCHAR, approve_path DECIMAL(38,18), pref_flag VARCHAR, first_approve_id BIGINT, first_mile_tri_date TIMESTAMP, org_tax_invoice_no VARCHAR, tax_rate DECIMAL(38,18), tracker_id BIGINT, issue_mode VARCHAR, source VARCHAR, is_use_workflow VARCHAR, work_flow_id BIGINT, amount_check_method VARCHAR, no_need_approval VARCHAR, specific_feature_type VARCHAR, sub_credit_reason_id BIGINT, application_type_id BIGINT, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_route (route_id BIGINT, proc_define_id BIGINT, node_define_id BIGINT, route_seq BIGINT, pre_node_define_when_reject BIGINT, pre_listener VARCHAR, after_listener VARCHAR, description VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_route (route_id BIGINT, proc_define_id BIGINT, node_define_id BIGINT, route_seq BIGINT, pre_node_define_when_reject BIGINT, pre_listener VARCHAR, after_listener VARCHAR, description VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_task (task_id BIGINT, proc_inst_id BIGINT, route_id BIGINT, handler_id BIGINT, description VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_task (task_id BIGINT, proc_inst_id BIGINT, route_id BIGINT, handler_id BIGINT, description VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_msg (message_id BIGINT, message_key VARCHAR, message VARCHAR, language VARCHAR, remark VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, app_name VARCHAR, ispublic DECIMAL(1,0), filename VARCHAR, message_md5_key VARCHAR, message_cf_key VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_msg (message_id BIGINT, message_key VARCHAR, message VARCHAR, language VARCHAR, remark VARCHAR, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, app_name VARCHAR, ispublic DECIMAL(1,0), filename VARCHAR, message_md5_key VARCHAR, message_cf_key VARCHAR, cdc_last_update_date TIMESTAMP, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_user (fname VARCHAR, lname VARCHAR, employee_number VARCHAR, area_code VARCHAR, apartment_code VARCHAR, w3_account VARCHAR, type VARCHAR, default_role VARCHAR, email VARCHAR, user_id BIGINT, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, hr_employee_id BIGINT, employee_name_eng VARCHAR, phone VARCHAR, position BIGINT, fax VARCHAR, organization_id BIGINT, temporary_contact VARCHAR, location VARCHAR, start_date TIMESTAMP, end_date TIMESTAMP, disable_date TIMESTAMP, last_update_login BIGINT, description VARCHAR, enable_flag VARCHAR, uu_id VARCHAR, default_org VARCHAR, global_user_id BIGINT, cdc_last_update_date VARCHAR, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_del_user (fname VARCHAR, lname VARCHAR, employee_number VARCHAR, area_code VARCHAR, apartment_code VARCHAR, w3_account VARCHAR, type VARCHAR, default_role VARCHAR, email VARCHAR, user_id BIGINT, created_by BIGINT, creation_date TIMESTAMP, last_updated_by BIGINT, last_update_date TIMESTAMP, hr_employee_id BIGINT, employee_name_eng VARCHAR, phone VARCHAR, position BIGINT, fax VARCHAR, organization_id BIGINT, temporary_contact VARCHAR, location VARCHAR, start_date TIMESTAMP, end_date TIMESTAMP, disable_date TIMESTAMP, last_update_login BIGINT, description VARCHAR, enable_flag VARCHAR, uu_id VARCHAR, default_org VARCHAR, global_user_id BIGINT, cdc_last_update_date VARCHAR, logical_is_deleted BOOLEAN, _hoodie_event_time VARCHAR);
+CREATE TABLE exp_ins.mlog_ins_contract (contract_id BIGINT, salesperson_id BIGINT, company_id BIGINT, contract_number VARCHAR, contract_flag INTEGER, customer_pono VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, customer_id BIGINT, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR);
+CREATE TABLE exp_ins.mlog_del_contract (contract_id BIGINT, salesperson_id BIGINT, company_id BIGINT, contract_number VARCHAR, contract_flag INTEGER, customer_pono VARCHAR, bg_code VARCHAR, bg_cn_name VARCHAR, bg_en_name VARCHAR, hw_contract_bussource_code VARCHAR, project_number VARCHAR, project_name VARCHAR, customer_id BIGINT, _hoodie_event_time VARCHAR, frame_contract_no VARCHAR);
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+ANALYZE exp_ins.cfs_proc_node_define_t;
+ANALYZE exp_ins.cfs_comm_currencies_t;
+ANALYZE exp_ins.cfs_comm_customer_t;
+ANALYZE exp_ins.cfs_comm_invtype_t;
+ANALYZE exp_ins.cfs_salesperson_region_t;
+ANALYZE exp_ins.dwd_job_status_t_05;
+SELECT '@@JOB5@@|E|insertion_only|init_base|crown||0';
+SELECT '@@JOB5@@|B|insertion_only|init_method|crown||0';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+CREATE TABLE crown_src_ccci AS
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date
+FROM cfs_cinv_customer_invoice_t WHERE status >= 3;
+
+CREATE TABLE crown_src_cici AS
+SELECT invoice_id, application_code, approve_date, status,
+       tax_invoice_no AS invoice_no, send_date
+FROM cfs_inv_invoice_info_t WHERE status IN (30, 40);
+
+CREATE TABLE crown_agg_apt AS
+SELECT application_code, MAX(tax_invoice_date) AS max_tax_invoice_date,
+       COUNT(*) AS cnt, COUNT(tax_invoice_date) AS cnt_nonnull
+FROM crown_src_ccci GROUP BY application_code;
+
+CREATE TABLE crown_agg_temp AS
+SELECT application_code, MAX(approve_date) AS max_approve_date,
+       COUNT(*) AS cnt, COUNT(approve_date) AS cnt_nonnull
+FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30
+      UNION ALL
+      SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) u
+GROUP BY application_code;
+
+CREATE TABLE crown_vp_tic AS
+SELECT invoice_no, application_code, send_date, COUNT(*) AS cnt
+FROM (SELECT invoice_no, application_code, send_date FROM crown_src_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date FROM crown_src_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+
+CREATE TABLE crown_vp_opii AS
+SELECT operator_application_id, COUNT(*) AS cnt
+FROM cfs_opt_application_inst_t GROUP BY operator_application_id;
+
+CREATE TABLE crown_vs_oa AS
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       (p.operator_application_id IS NOT NULL) AS flag_opii,
+       (g.application_code IS NOT NULL) AS flag_temp,
+       (v.application_code IS NOT NULL) AS flag_tic
+FROM cfs_opt_application_t oa
+LEFT JOIN crown_vp_opii p ON p.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT DISTINCT application_code FROM crown_agg_temp) g
+       ON g.application_code = oa.application_code
+LEFT JOIN (SELECT DISTINCT application_code FROM crown_vp_tic) v
+       ON v.application_code = oa.application_code
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+
+CREATE TABLE crown_mes AS
+SELECT message_id, message FROM tpl_fd_message_t
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|init_method|crown||0';
+SELECT '@@JOB5@@|B|insertion_only|init_index|crown||0';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+CREATE INDEX cw_src_ccci_pk ON exp_ins.crown_src_ccci (customer_invoice_id);
+CREATE INDEX cw_src_ccci_code ON exp_ins.crown_src_ccci (application_code);
+CREATE INDEX cw_src_cici_pk ON exp_ins.crown_src_cici (invoice_id);
+CREATE INDEX cw_src_cici_code ON exp_ins.crown_src_cici (application_code);
+CREATE INDEX cw_agg_apt_code ON exp_ins.crown_agg_apt (application_code);
+CREATE INDEX cw_agg_temp_code ON exp_ins.crown_agg_temp (application_code);
+CREATE INDEX cw_vp_tic_code ON exp_ins.crown_vp_tic (application_code);
+CREATE INDEX cw_vp_opii_key ON exp_ins.crown_vp_opii (operator_application_id);
+CREATE INDEX cw_vs_oa_pk ON exp_ins.crown_vs_oa (operator_application_id);
+CREATE INDEX cw_vs_oa_code ON exp_ins.crown_vs_oa (application_code);
+CREATE INDEX cw_vs_oa_wf ON exp_ins.crown_vs_oa (work_flow_id);
+SELECT '@@JOB5@@|E|insertion_only|init_index|crown||0';
+SELECT '@@JOB5@@|B|insertion_only|init_views|crown||0';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+-- SOURCE_FILE: create_matview.sql
+-- SOURCE_OBJECT: all 9 materialized view definitions
+-- METHOD: logical_views
+-- QUERY_FORM: init
+-- TRANSFORMATIONS: converted INCREMENTAL MATERIALIZED VIEW to ordinary CREATE VIEW; dialect adaptation
+
+CREATE OR REPLACE VIEW tmp_zx_send_countersign_t_cw AS
+SELECT ccci.application_code, ccci.approve_date, ccci.status, ccci.invoice_no,
+    ccci.send_date, ccci.office_receive_date, ccci.customer_receive_date,
+    ccci.tax_invoice_date, '1' AS type
+FROM exp_ins.cfs_cinv_customer_invoice_t ccci WHERE ccci.status >= 3
+UNION ALL
+SELECT cici.application_code, cici.approve_date, cici.status,
+    cici.tax_invoice_no AS invoice_no, cici.send_date,
+    NULL AS office_receive_date, NULL AS customer_receive_date,
+    NULL AS tax_invoice_date, '2' AS type
+FROM exp_ins.cfs_inv_invoice_info_t cici WHERE cici.status IN (30, 40);
+
+CREATE OR REPLACE VIEW apt_cw AS
+SELECT application_code, MAX(tax_invoice_date) AS tax_invoice_date
+FROM tmp_zx_send_countersign_t_cw WHERE type = '1'
+GROUP BY application_code;
+
+CREATE OR REPLACE VIEW tmp_cfs_opt_application_inst_t_cw AS
+SELECT opii.application_inst_id, oa.operator_application_id, oa.application_code,
+    oa.salesperson_id, oa.company_id, oa.customer_id, opii.contract_id,
+    oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time,
+    oa.logical_is_deleted,
+    GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date,
+    oa.work_flow_id, oa.application_type, oa.status,
+    GREATEST(CAST(oa.logical_is_deleted AS INTEGER), CAST(opii.logical_is_deleted AS INTEGER))::BOOLEAN AS logical_is_deleted_del,
+    opii.payment_unit_id, pu.payment_unit_number, apt.tax_invoice_date
+FROM (SELECT * FROM crown_vs_oa
+      WHERE flag_opii AND (status = 30 OR (status = 40 AND flag_temp)
+                                       OR (status = 50 AND flag_tic))) oa
+JOIN exp_ins.cfs_opt_application_inst_t opii ON oa.operator_application_id = opii.operator_application_id
+LEFT JOIN exp_ins.cfs_con_payment_unit_t pu ON opii.payment_unit_id = pu.payment_unit_id
+LEFT JOIN (SELECT application_code, max_tax_invoice_date AS tax_invoice_date FROM crown_agg_apt) apt ON oa.application_code = apt.application_code
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50)
+  AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+
+CREATE OR REPLACE VIEW approval_temp_cw AS
+SELECT oa.application_inst_id AS id, CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+    oa.application_code,
+    CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+    oa.operator_application_id AS business_id,
+    '税票' AS bill_type, '正项' AS business_type, '待审批' AS node_type,
+    -999 AS invoice_type_id, oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+    CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+    oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+    oa.currency_id, oa.total_amount, oa.creation_date,
+    oa.applicant_time AS submit_date, oa.applicant_time,
+    CAST(NULL AS BIGINT) AS current_handler_id, node.node_define_name_cn AS currentrole,
+    CAST(NULL AS BIGINT) AS todo_billing_id, CAST(NULL AS BIGINT) AS payment_unit_id,
+    CAST(NULL AS VARCHAR) AS source_code, CAST(NULL AS VARCHAR) AS details_flag,
+    CAST(NULL AS VARCHAR) AS billing_status,
+    oa.logical_is_deleted, oa.cdc_last_update_date, oa.logical_is_deleted_del,
+    oa.tax_invoice_date, oa.payment_unit_number
+FROM tmp_cfs_opt_application_inst_t_cw oa
+LEFT JOIN exp_ins.cfs_proc_task_t task ON oa.work_flow_id = task.proc_inst_id
+LEFT JOIN exp_ins.cfs_proc_route_t route ON task.route_id = route.route_id
+LEFT JOIN exp_ins.cfs_proc_node_define_t node ON route.node_define_id = node.node_define_id
+WHERE oa.status = 30;
+
+CREATE OR REPLACE VIEW temp_cw AS
+SELECT t.application_code, MAX(t.approve_date) AS approve_date
+FROM tmp_zx_send_countersign_t_cw t WHERE t.status = 30
+GROUP BY t.application_code;
+
+CREATE OR REPLACE VIEW send_temp_cw AS
+SELECT oa.application_inst_id AS id, CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+    oa.application_code,
+    CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+    oa.operator_application_id AS business_id,
+    '税票' AS bill_type, '正项' AS business_type, '待寄送' AS node_type,
+    -999 AS invoice_type_id, oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+    CAST(NULL AS BIGINT) AS invoice_id, CAST(NULL AS VARCHAR) AS invoice_no,
+    oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+    oa.currency_id, oa.total_amount, oa.creation_date,
+    temp.approve_date AS submit_date, oa.applicant_time,
+    CAST(NULL AS BIGINT) AS current_handler_id, mes.message AS currentrole,
+    CAST(NULL AS BIGINT) AS todo_billing_id, CAST(NULL AS BIGINT) AS payment_unit_id,
+    CAST(NULL AS VARCHAR) AS source_code, CAST(NULL AS VARCHAR) AS details_flag,
+    CAST(NULL AS VARCHAR) AS billing_status,
+    oa.logical_is_deleted, oa.cdc_last_update_date, oa.logical_is_deleted_del,
+    oa.tax_invoice_date, oa.payment_unit_number
+FROM tmp_cfs_opt_application_inst_t_cw oa
+JOIN (SELECT application_code, max_approve_date AS approve_date FROM crown_agg_temp) temp ON temp.application_code = oa.application_code
+LEFT JOIN crown_mes mes ON (true)
+WHERE oa.status = 40;
+
+CREATE OR REPLACE VIEW tic_cw AS
+SELECT DISTINCT ccci.invoice_no, ccci.application_code, ccci.send_date
+FROM tmp_zx_send_countersign_t_cw ccci
+WHERE ccci.status >= 40
+  AND (ccci.office_receive_date IS NULL OR ccci.customer_receive_date IS NULL);
+
+CREATE OR REPLACE VIEW countersign_temp_cw AS
+SELECT oa.application_inst_id AS id, CAST(oa.operator_application_id AS VARCHAR) AS head_id,
+    oa.application_code,
+    CAST(to_char(oa.applicant_time, 'yyyyMM') AS INTEGER) AS period_id,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_dd,
+    CAST(to_char(oa.applicant_time, 'yyyyMMdd') AS INTEGER) AS period_id_qty,
+    oa.operator_application_id AS business_id,
+    '税票' AS bill_type, '正项' AS business_type, '待签返' AS node_type,
+    -999 AS invoice_type_id, oa.salesperson_id, oa.company_id, oa.customer_id, oa.contract_id,
+    CAST(NULL AS BIGINT) AS invoice_id, tic.invoice_no,
+    oa.operator_application_id, CAST(NULL AS VARCHAR) AS milestone_name,
+    oa.currency_id, oa.total_amount, oa.creation_date,
+    tic.send_date AS submit_date, oa.applicant_time,
+    CAST(NULL AS BIGINT) AS current_handler_id, '结束' AS currentrole,
+    CAST(NULL AS BIGINT) AS todo_billing_id, CAST(NULL AS BIGINT) AS payment_unit_id,
+    CAST(NULL AS VARCHAR) AS source_code, CAST(NULL AS VARCHAR) AS details_flag,
+    CAST(NULL AS VARCHAR) AS billing_status,
+    oa.logical_is_deleted, oa.cdc_last_update_date, oa.logical_is_deleted_del,
+    oa.tax_invoice_date, oa.payment_unit_number
+FROM tmp_cfs_opt_application_inst_t_cw oa
+JOIN (SELECT invoice_no, application_code, send_date FROM crown_vp_tic) tic ON tic.application_code = oa.application_code
+WHERE oa.status = 50;
+
+CREATE OR REPLACE VIEW fact_t_cw AS
+SELECT id, head_id, application_code, period_id, period_id_dd, period_id_qty,
+    business_id, bill_type, business_type, node_type, invoice_type_id,
+    salesperson_id, company_id, customer_id, contract_id,
+    invoice_id, invoice_no, operator_application_id, milestone_name,
+    currency_id, total_amount, creation_date, submit_date, applicant_time,
+    current_handler_id, currentrole, todo_billing_id, payment_unit_id,
+    source_code, details_flag, billing_status, logical_is_deleted,
+    cdc_last_update_date, tax_invoice_date, payment_unit_number
+FROM approval_temp_cw
+UNION ALL
+SELECT id, head_id, application_code, period_id, period_id_dd, period_id_qty,
+    business_id, bill_type, business_type, node_type, invoice_type_id,
+    salesperson_id, company_id, customer_id, contract_id,
+    invoice_id, invoice_no, operator_application_id, milestone_name,
+    currency_id, total_amount, creation_date, submit_date, applicant_time,
+    current_handler_id, currentrole, todo_billing_id, payment_unit_id,
+    source_code, details_flag, billing_status, logical_is_deleted,
+    cdc_last_update_date, tax_invoice_date, payment_unit_number
+FROM send_temp_cw
+UNION ALL
+SELECT id, head_id, application_code, period_id, period_id_dd, period_id_qty,
+    business_id, bill_type, business_type, node_type, invoice_type_id,
+    salesperson_id, company_id, customer_id, contract_id,
+    invoice_id, invoice_no, operator_application_id, milestone_name,
+    currency_id, total_amount, creation_date, submit_date, applicant_time,
+    current_handler_id, currentrole, todo_billing_id, payment_unit_id,
+    source_code, details_flag, billing_status, logical_is_deleted,
+    cdc_last_update_date, tax_invoice_date, payment_unit_number
+FROM countersign_temp_cw;
+SELECT '@@JOB5@@|E|insertion_only|init_views|crown||0';
+SELECT '@@JOB5@@|B|insertion_only|analyze|crown||0';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+ANALYZE exp_ins.cfs_proc_node_define_t;
+ANALYZE exp_ins.cfs_comm_currencies_t;
+ANALYZE exp_ins.cfs_comm_customer_t;
+ANALYZE exp_ins.cfs_comm_invtype_t;
+ANALYZE exp_ins.cfs_salesperson_region_t;
+ANALYZE exp_ins.dwd_job_status_t_05;
+ANALYZE exp_ins.mlog_ins_company;
+ANALYZE exp_ins.mlog_ins_cinv;
+ANALYZE exp_ins.mlog_ins_pu;
+ANALYZE exp_ins.mlog_ins_inv;
+ANALYZE exp_ins.mlog_ins_inst;
+ANALYZE exp_ins.mlog_ins_app;
+ANALYZE exp_ins.mlog_ins_route;
+ANALYZE exp_ins.mlog_ins_task;
+ANALYZE exp_ins.mlog_ins_msg;
+ANALYZE exp_ins.mlog_ins_user;
+ANALYZE exp_ins.mlog_ins_contract;
+ANALYZE exp_ins.mlog_del_company;
+ANALYZE exp_ins.mlog_del_cinv;
+ANALYZE exp_ins.mlog_del_pu;
+ANALYZE exp_ins.mlog_del_inv;
+ANALYZE exp_ins.mlog_del_inst;
+ANALYZE exp_ins.mlog_del_app;
+ANALYZE exp_ins.mlog_del_route;
+ANALYZE exp_ins.mlog_del_task;
+ANALYZE exp_ins.mlog_del_msg;
+ANALYZE exp_ins.mlog_del_user;
+ANALYZE exp_ins.mlog_del_contract;
+ANALYZE exp_ins.dtl_rc;
+ANALYZE exp_ins.dtl_lv;
+ANALYZE exp_ins.dtl_mv;
+ANALYZE exp_ins.dtl_cw;
+ANALYZE exp_ins.sum_rc;
+ANALYZE exp_ins.sum_lv;
+ANALYZE exp_ins.sum_mv;
+ANALYZE exp_ins.sum_cw;
+ANALYZE exp_ins.crown_src_ccci;
+ANALYZE exp_ins.crown_src_cici;
+ANALYZE exp_ins.crown_agg_apt;
+ANALYZE exp_ins.crown_agg_temp;
+ANALYZE exp_ins.crown_vp_tic;
+ANALYZE exp_ins.crown_vp_opii;
+ANALYZE exp_ins.crown_vs_oa;
+ANALYZE exp_ins.crown_mes;
+SELECT '@@JOB5@@|E|insertion_only|analyze|crown||0';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||5';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||5';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||5';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|5';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|5';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|5';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|5';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|5';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|5';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|5';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|5';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|5';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|5';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|5';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|5';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|5';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_006/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_007/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_008/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_009/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_010/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||10';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||10';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||10';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|10';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|10';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|10';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|10';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|10';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|10';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|10';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|10';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|10';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|10';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|10';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|10';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|10';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_011/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_012/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_013/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_014/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_015/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||15';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||15';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||15';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|15';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|15';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|15';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|15';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|15';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|15';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|15';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|15';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|15';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|15';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|15';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|15';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|15';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_016/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_017/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_018/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_019/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_020/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||20';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||20';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||20';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|20';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|20';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|20';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|20';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|20';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|20';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|20';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|20';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|20';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|20';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|20';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|20';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|20';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_021/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_022/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_023/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_024/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_025/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||25';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||25';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||25';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|25';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|25';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|25';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|25';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|25';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|25';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|25';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|25';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|25';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|25';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|25';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|25';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|25';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_026/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_027/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_028/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_029/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_030/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||30';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||30';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||30';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|30';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|30';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|30';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|30';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|30';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|30';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|30';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|30';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|30';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|30';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|30';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|30';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|30';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_031/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_032/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_033/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_034/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_035/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||35';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||35';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||35';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|35';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|35';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|35';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|35';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|35';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|35';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|35';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|35';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|35';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|35';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|35';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|35';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|35';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_036/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_037/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_038/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_039/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_040/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||40';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||40';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||40';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|40';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|40';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|40';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|40';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|40';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|40';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|40';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|40';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|40';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|40';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|40';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|40';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|40';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_041/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_042/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_043/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_044/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_045/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||45';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||45';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||45';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|45';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|45';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|45';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|45';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|45';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|45';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|45';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|45';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|45';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|45';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|45';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|45';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|45';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_046/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_047/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_048/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_049/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_050/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||50';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||50';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||50';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|50';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|50';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|50';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|50';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|50';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|50';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|50';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|50';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|50';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|50';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|50';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|50';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|50';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_051/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_052/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_053/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_054/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_055/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||55';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||55';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||55';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|55';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|55';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|55';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|55';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|55';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|55';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|55';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|55';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|55';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|55';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|55';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|55';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|55';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_056/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_057/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_058/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_059/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_060/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||60';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||60';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||60';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|60';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|60';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|60';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|60';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|60';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|60';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|60';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|60';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|60';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|60';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|60';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|60';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|60';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_061/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_062/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_063/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_064/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_065/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||65';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||65';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||65';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|65';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|65';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|65';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|65';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|65';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|65';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|65';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|65';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|65';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|65';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|65';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|65';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|65';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_066/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_067/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_068/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_069/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_070/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||70';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||70';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||70';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|70';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|70';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|70';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|70';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|70';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|70';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|70';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|70';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|70';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|70';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|70';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|70';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|70';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_071/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_072/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_073/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_074/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_075/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||75';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||75';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||75';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|75';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|75';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|75';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|75';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|75';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|75';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|75';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|75';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|75';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|75';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|75';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|75';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|75';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_076/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_077/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_078/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_079/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_080/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||80';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||80';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||80';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|80';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|80';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|80';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|80';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|80';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|80';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|80';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|80';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|80';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|80';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|80';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|80';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|80';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_081/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_082/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_083/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_084/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_085/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||85';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||85';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||85';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|85';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|85';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|85';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|85';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|85';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|85';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|85';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|85';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|85';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|85';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|85';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|85';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|85';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_086/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_087/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_088/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_089/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_090/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||90';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||90';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||90';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|90';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|90';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|90';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|90';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|90';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|90';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|90';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|90';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|90';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|90';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|90';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|90';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|90';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_091/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_092/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_093/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_094/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_095/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||95';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||95';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||95';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|95';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|95';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|95';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|95';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|95';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|95';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|95';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|95';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|95';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|95';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|95';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|95';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|95';
+SELECT '@@JOB5@@|B|insertion_only|staging|crown||100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+
+TRUNCATE exp_ins.mlog_ins_company;
+TRUNCATE exp_ins.mlog_del_company;
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_company FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_cfg_company_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_cinv;
+TRUNCATE exp_ins.mlog_del_cinv;
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_cinv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_cinv_customer_invoice_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_pu;
+TRUNCATE exp_ins.mlog_del_pu;
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_pu FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_con_payment_unit_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inv;
+TRUNCATE exp_ins.mlog_del_inv;
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inv FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_inv_invoice_info_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_inst;
+TRUNCATE exp_ins.mlog_del_inst;
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_inst FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_opt_application_inst_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_app;
+TRUNCATE exp_ins.mlog_del_app;
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_app FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_opt_application_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_route;
+TRUNCATE exp_ins.mlog_del_route;
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_route FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_proc_route_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_task;
+TRUNCATE exp_ins.mlog_del_task;
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_task FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.cfs_proc_task_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_msg;
+TRUNCATE exp_ins.mlog_del_msg;
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_msg FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.tpl_fd_message_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_user;
+TRUNCATE exp_ins.mlog_del_user;
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_user FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_cqrs_cfs.tpl_user_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+TRUNCATE exp_ins.mlog_ins_contract;
+TRUNCATE exp_ins.mlog_del_contract;
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_096/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_097/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_098/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_099/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+COPY exp_ins.mlog_ins_contract FROM '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_100/s000_dwt_hws_iao.cfs_comm_contract_t.csv' WITH (FORMAT csv, HEADER true, DELIMITER ',');
+SELECT '@@JOB5@@|E|insertion_only|staging|crown||100';
+SELECT '@@JOB5@@|B|insertion_only|base_insert|crown||100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+INSERT INTO exp_ins.cfs_cfg_company_t SELECT * FROM exp_ins.mlog_ins_company;
+INSERT INTO exp_ins.cfs_cinv_customer_invoice_t SELECT * FROM exp_ins.mlog_ins_cinv;
+INSERT INTO exp_ins.cfs_con_payment_unit_t SELECT * FROM exp_ins.mlog_ins_pu;
+INSERT INTO exp_ins.cfs_inv_invoice_info_t SELECT * FROM exp_ins.mlog_ins_inv;
+INSERT INTO exp_ins.cfs_opt_application_inst_t SELECT * FROM exp_ins.mlog_ins_inst;
+INSERT INTO exp_ins.cfs_opt_application_t SELECT * FROM exp_ins.mlog_ins_app;
+INSERT INTO exp_ins.cfs_proc_route_t SELECT * FROM exp_ins.mlog_ins_route;
+INSERT INTO exp_ins.cfs_proc_task_t SELECT * FROM exp_ins.mlog_ins_task;
+INSERT INTO exp_ins.tpl_fd_message_t SELECT * FROM exp_ins.mlog_ins_msg;
+INSERT INTO exp_ins.tpl_user_t SELECT * FROM exp_ins.mlog_ins_user;
+INSERT INTO exp_ins.cfs_comm_contract_t SELECT * FROM exp_ins.mlog_ins_contract;
+SELECT '@@JOB5@@|E|insertion_only|base_insert|crown||100';
+SELECT '@@JOB5@@|B|insertion_only|maintain|crown||100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+DROP TABLE IF EXISTS _c_dsrc_ccci;
+CREATE TEMP TABLE _c_dsrc_ccci AS 
+SELECT s.*, -1 AS w FROM crown_src_ccci s
+WHERE s.customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv)
+UNION ALL
+SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date, 1 FROM mlog_ins_cinv WHERE status >= 3;
+DROP TABLE IF EXISTS _c_dsrc_cici;
+CREATE TEMP TABLE _c_dsrc_cici AS 
+SELECT s.*, -1 AS w FROM crown_src_cici s
+WHERE s.invoice_id IN (SELECT invoice_id FROM mlog_del_inv)
+UNION ALL
+SELECT invoice_id, application_code, approve_date, status, tax_invoice_no, send_date, 1
+FROM mlog_ins_inv WHERE status IN (30, 40);
+DELETE FROM crown_src_ccci WHERE customer_invoice_id IN (SELECT customer_invoice_id FROM mlog_del_cinv);
+INSERT INTO crown_src_ccci SELECT customer_invoice_id, application_code, approve_date, status, invoice_no, send_date, office_receive_date, customer_receive_date, tax_invoice_date FROM _c_dsrc_ccci WHERE w = 1;
+DELETE FROM crown_src_cici WHERE invoice_id IN (SELECT invoice_id FROM mlog_del_inv);
+INSERT INTO crown_src_cici SELECT invoice_id, application_code, approve_date, status, invoice_no, send_date FROM _c_dsrc_cici WHERE w = 1;
+DROP TABLE IF EXISTS _c_d_apt;
+CREATE TEMP TABLE _c_d_apt AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN tax_invoice_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN tax_invoice_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN tax_invoice_date END) AS del_max
+FROM _c_dsrc_ccci GROUP BY application_code;
+UPDATE crown_agg_apt SET
+    cnt = crown_agg_apt.cnt + d.cnt_d, cnt_nonnull = crown_agg_apt.cnt_nonnull + d.nn_d,
+    max_tax_invoice_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_apt.max_tax_invoice_date
+        WHEN crown_agg_apt.max_tax_invoice_date IS NULL OR d.ins_max > crown_agg_apt.max_tax_invoice_date
+        THEN d.ins_max ELSE crown_agg_apt.max_tax_invoice_date END
+FROM _c_d_apt d WHERE crown_agg_apt.application_code = d.application_code;
+INSERT INTO crown_agg_apt
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_apt d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_apt t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_apt;
+CREATE TEMP TABLE _c_sus_c_d_apt AS 
+SELECT d.application_code AS c FROM _c_d_apt d
+JOIN crown_agg_apt x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_tax_invoice_date IS NULL OR d.del_max >= x.max_tax_invoice_date);
+UPDATE crown_agg_apt SET max_tax_invoice_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.tax_invoice_date) AS mx
+      FROM crown_src_ccci s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_apt)
+      GROUP BY s.application_code) r
+WHERE crown_agg_apt.application_code = r.c AND crown_agg_apt.cnt > 0;
+DELETE FROM crown_agg_apt WHERE cnt <= 0;
+UPDATE crown_agg_apt SET max_tax_invoice_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_d_temp;
+CREATE TEMP TABLE _c_d_temp AS 
+SELECT application_code,
+       SUM(w) AS cnt_d,
+       SUM(CASE WHEN approve_date IS NOT NULL THEN w ELSE 0 END) AS nn_d,
+       MAX(CASE WHEN w = 1 THEN approve_date END) AS ins_max,
+       MAX(CASE WHEN w = -1 THEN approve_date END) AS del_max
+FROM (SELECT application_code, approve_date, w FROM _c_dsrc_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date, w FROM _c_dsrc_cici WHERE status = 30) u GROUP BY application_code;
+DROP TABLE IF EXISTS _c_pre_temp;
+CREATE TEMP TABLE _c_pre_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+UPDATE crown_agg_temp SET
+    cnt = crown_agg_temp.cnt + d.cnt_d, cnt_nonnull = crown_agg_temp.cnt_nonnull + d.nn_d,
+    max_approve_date = CASE WHEN d.ins_max IS NULL THEN crown_agg_temp.max_approve_date
+        WHEN crown_agg_temp.max_approve_date IS NULL OR d.ins_max > crown_agg_temp.max_approve_date
+        THEN d.ins_max ELSE crown_agg_temp.max_approve_date END
+FROM _c_d_temp d WHERE crown_agg_temp.application_code = d.application_code;
+INSERT INTO crown_agg_temp
+SELECT d.application_code, d.ins_max, d.cnt_d, d.nn_d FROM _c_d_temp d
+WHERE NOT EXISTS (SELECT 1 FROM crown_agg_temp t WHERE t.application_code = d.application_code);
+DROP TABLE IF EXISTS _c_sus_c_d_temp;
+CREATE TEMP TABLE _c_sus_c_d_temp AS 
+SELECT d.application_code AS c FROM _c_d_temp d
+JOIN crown_agg_temp x ON x.application_code = d.application_code
+WHERE d.del_max IS NOT NULL
+  AND (x.max_approve_date IS NULL OR d.del_max >= x.max_approve_date);
+UPDATE crown_agg_temp SET max_approve_date = r.mx
+FROM (SELECT s.application_code AS c, MAX(s.approve_date) AS mx
+      FROM (SELECT application_code, approve_date FROM crown_src_ccci WHERE status = 30 UNION ALL SELECT application_code, approve_date FROM crown_src_cici WHERE status = 30) s WHERE s.application_code IN (SELECT c FROM _c_sus_c_d_temp)
+      GROUP BY s.application_code) r
+WHERE crown_agg_temp.application_code = r.c AND crown_agg_temp.cnt > 0;
+DELETE FROM crown_agg_temp WHERE cnt <= 0;
+UPDATE crown_agg_temp SET max_approve_date = NULL WHERE cnt_nonnull = 0;
+DROP TABLE IF EXISTS _c_post_temp;
+CREATE TEMP TABLE _c_post_temp AS 
+SELECT application_code FROM crown_agg_temp
+WHERE application_code IN (SELECT application_code FROM _c_d_temp);
+DROP TABLE IF EXISTS _c_d_tic;
+CREATE TEMP TABLE _c_d_tic AS 
+SELECT invoice_no, application_code, send_date, SUM(w) AS w
+FROM (SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_ccci
+      WHERE status >= 40 AND (office_receive_date IS NULL OR customer_receive_date IS NULL)
+      UNION ALL
+      SELECT invoice_no, application_code, send_date, w FROM _c_dsrc_cici
+      WHERE status >= 40) u
+GROUP BY invoice_no, application_code, send_date;
+DROP TABLE IF EXISTS _c_pre_tic;
+CREATE TEMP TABLE _c_pre_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+UPDATE crown_vp_tic SET cnt = crown_vp_tic.cnt + d.w
+FROM _c_d_tic d WHERE crown_vp_tic.application_code = d.application_code AND crown_vp_tic.invoice_no IS NOT DISTINCT FROM d.invoice_no AND crown_vp_tic.send_date IS NOT DISTINCT FROM d.send_date;
+INSERT INTO crown_vp_tic
+SELECT d.invoice_no, d.application_code, d.send_date, d.w FROM _c_d_tic d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_tic t WHERE t.application_code = d.application_code AND t.invoice_no IS NOT DISTINCT FROM d.invoice_no AND t.send_date IS NOT DISTINCT FROM d.send_date);
+DELETE FROM crown_vp_tic WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_tic;
+CREATE TEMP TABLE _c_post_tic AS 
+SELECT DISTINCT application_code FROM crown_vp_tic
+WHERE application_code IN (SELECT DISTINCT application_code FROM _c_d_tic);
+DROP TABLE IF EXISTS _c_d_opii;
+CREATE TEMP TABLE _c_d_opii AS 
+SELECT operator_application_id, SUM(w) AS w
+FROM (SELECT operator_application_id, -1 AS w FROM mlog_del_inst
+      UNION ALL
+      SELECT operator_application_id, 1 FROM mlog_ins_inst) u
+GROUP BY operator_application_id;
+DROP TABLE IF EXISTS _c_pre_opii;
+CREATE TEMP TABLE _c_pre_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+UPDATE crown_vp_opii SET cnt = crown_vp_opii.cnt + d.w
+FROM _c_d_opii d WHERE crown_vp_opii.operator_application_id = d.operator_application_id;
+INSERT INTO crown_vp_opii
+SELECT d.operator_application_id, d.w FROM _c_d_opii d
+WHERE NOT EXISTS (SELECT 1 FROM crown_vp_opii t
+                  WHERE t.operator_application_id = d.operator_application_id);
+DELETE FROM crown_vp_opii WHERE cnt <= 0;
+DROP TABLE IF EXISTS _c_post_opii;
+CREATE TEMP TABLE _c_post_opii AS 
+SELECT operator_application_id FROM crown_vp_opii
+WHERE operator_application_id IN (SELECT operator_application_id FROM _c_d_opii);
+DROP TABLE IF EXISTS _c_born_flag_opii;
+CREATE TEMP TABLE _c_born_flag_opii AS SELECT a.operator_application_id FROM _c_post_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_opii b WHERE b.operator_application_id = a.operator_application_id);
+DROP TABLE IF EXISTS _c_died_flag_opii;
+CREATE TEMP TABLE _c_died_flag_opii AS SELECT a.operator_application_id FROM _c_pre_opii a WHERE NOT EXISTS (SELECT 1 FROM _c_post_opii b WHERE b.operator_application_id = a.operator_application_id);
+UPDATE crown_vs_oa SET flag_opii = true
+WHERE flag_opii = false AND operator_application_id IN (SELECT operator_application_id FROM _c_born_flag_opii);
+UPDATE crown_vs_oa SET flag_opii = false
+WHERE flag_opii = true AND operator_application_id IN (SELECT operator_application_id FROM _c_died_flag_opii);
+DROP TABLE IF EXISTS _c_born_flag_temp;
+CREATE TEMP TABLE _c_born_flag_temp AS SELECT a.application_code FROM _c_post_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_temp b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_temp;
+CREATE TEMP TABLE _c_died_flag_temp AS SELECT a.application_code FROM _c_pre_temp a WHERE NOT EXISTS (SELECT 1 FROM _c_post_temp b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_temp = true
+WHERE flag_temp = false AND application_code IN (SELECT application_code FROM _c_born_flag_temp);
+UPDATE crown_vs_oa SET flag_temp = false
+WHERE flag_temp = true AND application_code IN (SELECT application_code FROM _c_died_flag_temp);
+DROP TABLE IF EXISTS _c_born_flag_tic;
+CREATE TEMP TABLE _c_born_flag_tic AS SELECT a.application_code FROM _c_post_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_pre_tic b WHERE b.application_code = a.application_code);
+DROP TABLE IF EXISTS _c_died_flag_tic;
+CREATE TEMP TABLE _c_died_flag_tic AS SELECT a.application_code FROM _c_pre_tic a WHERE NOT EXISTS (SELECT 1 FROM _c_post_tic b WHERE b.application_code = a.application_code);
+UPDATE crown_vs_oa SET flag_tic = true
+WHERE flag_tic = false AND application_code IN (SELECT application_code FROM _c_born_flag_tic);
+UPDATE crown_vs_oa SET flag_tic = false
+WHERE flag_tic = true AND application_code IN (SELECT application_code FROM _c_died_flag_tic);
+DELETE FROM crown_vs_oa WHERE operator_application_id IN (SELECT operator_application_id FROM mlog_del_app);
+INSERT INTO crown_vs_oa
+SELECT oa.operator_application_id, oa.application_code, oa.salesperson_id, oa.company_id, oa.customer_id, oa.currency_id, oa.total_amount, oa.creation_date, oa.applicant_time, oa.logical_is_deleted, oa.cdc_last_update_date, oa.work_flow_id, oa.application_type, oa.status,
+       EXISTS (SELECT 1 FROM crown_vp_opii p
+               WHERE p.operator_application_id = oa.operator_application_id),
+       EXISTS (SELECT 1 FROM crown_agg_temp g
+               WHERE g.application_code = oa.application_code),
+       EXISTS (SELECT 1 FROM crown_vp_tic v
+               WHERE v.application_code = oa.application_code)
+FROM mlog_ins_app oa
+WHERE oa.application_type = 1 AND oa.status IN (30, 40, 50) AND oa.creation_date > TIMESTAMP '2022-01-01 00:00:00';
+DELETE FROM crown_mes WHERE message_id IN (SELECT message_id FROM mlog_del_msg);
+INSERT INTO crown_mes SELECT message_id, message FROM mlog_ins_msg
+WHERE app_name = 'cfs' AND language = 'zh_CN' AND message_key = 'cfs.html.label.role.operatorInvoiceSender';
+SELECT '@@JOB5@@|E|insertion_only|maintain|crown||100';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: first detail query from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id,
+    fact_t.head_id,
+    fact_t.period_id,
+    fact_t.period_id_dd,
+    fact_t.period_id_qty,
+    fact_t.business_id,
+    fact_t.bill_type,
+    fact_t.business_type,
+    fact_t.node_type,
+    fact_t.invoice_type_id,
+    type_t.invoice_category,
+    type_t.invoice_type_name,
+    fact_t.salesperson_id,
+    fact_t.company_id,
+    comp_t.company_code,
+    comp_t.company_name,
+    COALESCE(sprt1.salesperson_code, sprt2.salesperson_code) AS cfs_salesperson_code,
+    COALESCE(sprt1.salesperson_name, sprt2.salesperson_name) AS cfs_salesperson_name,
+    COALESCE(sprt1.cfs_region_id, sprt2.cfs_region_id) AS cfs_region_id,
+    COALESCE(sprt1.cfs_region_code, sprt2.cfs_region_code) AS cfs_region_code,
+    COALESCE(sprt1.cfs_region_en_name, sprt2.cfs_region_en_name) AS cfs_region_en_name,
+    COALESCE(sprt1.cfs_repoffice_code, sprt2.cfs_repoffice_code) AS cfs_repoffice_code,
+    COALESCE(sprt1.cfs_repoffice_en_name, sprt2.cfs_repoffice_en_name) AS cfs_repoffice_en_name,
+    COALESCE(sprt1.region_code, sprt2.region_code) AS region_code,
+    COALESCE(sprt1.region_cn_name, sprt2.region_cn_name) AS region_cn_name,
+    COALESCE(sprt1.region_en_name, sprt2.region_en_name) AS region_en_name,
+    COALESCE(sprt1.repoffice_code, sprt2.repoffice_code) AS repoffice_code,
+    COALESCE(sprt1.repoffice_cn_name, sprt2.repoffice_cn_name) AS repoffice_cn_name,
+    COALESCE(sprt1.repoffice_en_name, sprt2.repoffice_en_name) AS repoffice_en_name,
+    COALESCE(sprt1.country_code, sprt2.country_code) AS country_code,
+    COALESCE(sprt1.country_cn_name, sprt2.country_cn_name) AS country_cn_name,
+    COALESCE(sprt1.country_en_name, sprt2.country_en_name) AS country_en_name,
+    cont_t.bg_code, cont_t.bg_cn_name, cont_t.bg_en_name,
+    fact_t.customer_id,
+    cust_t.customer_code, cust_t.customer_name, cust_t.customer_group_name,
+    fact_t.contract_id,
+    cont_t.contract_number, cont_t.customer_pono,
+    cont_t.hw_contract_bussource_code, cont_t.project_number, cont_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no,
+    fact_t.operator_application_id, fact_t.application_code,
+    fact_t.milestone_name, fact_t.currency_id,
+    curr_t.from_currency_code,
+    curr_t.usd_rate * fact_t.total_amount AS usd_total_amount,
+    curr_t.rmb_rate * fact_t.total_amount AS rmb_total_amount,
+    fact_t.total_amount, fact_t.creation_date,
+    fact_t.submit_date, fact_t.applicant_time,
+    1 AS con_mi_qty,
+    fact_t.current_handler_id,
+    user_t.lname AS current_handler_code,
+    user_t.lname AS current_handler_name,
+    fact_t.currentrole,
+    fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    fact_t.logical_is_deleted,
+    CURRENT_TIMESTAMP AS src_cdc_event_date,
+    CURRENT_TIMESTAMP AS src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    cont_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code,
+    CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks,
+    CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status,
+    CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name,
+    CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id,
+    CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date,
+    fact_t.payment_unit_number
+FROM fact_t_cw AS fact_t
+LEFT JOIN exp_ins.cfs_comm_invtype_t AS type_t ON fact_t.invoice_type_id = type_t.invoice_type_id
+LEFT JOIN exp_ins.cfs_cfg_company_t AS comp_t ON fact_t.company_id = comp_t.company_id
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt1
+    ON fact_t.salesperson_id = sprt1.salesperson_id AND sprt1.source_code = '业务补录'
+LEFT JOIN exp_ins.cfs_salesperson_region_t AS sprt2
+    ON fact_t.salesperson_id = sprt2.salesperson_id
+    AND comp_t.company_code = sprt2.unit_code AND sprt2.source_code = '原始表中已有的账套'
+LEFT JOIN exp_ins.cfs_comm_customer_t AS cust_t ON fact_t.customer_id = cust_t.customer_id
+INNER JOIN exp_ins.cfs_comm_contract_t AS cont_t ON fact_t.contract_id = cont_t.contract_id
+LEFT JOIN exp_ins.cfs_comm_currencies_t AS curr_t ON CAST(fact_t.currency_id AS VARCHAR) = curr_t.from_currency_id
+LEFT JOIN exp_ins.tpl_user_t AS user_t ON fact_t.current_handler_id = user_t.user_id
+LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+WHERE
+    (cont_t.hw_contract_bussource_code <> 'OEM' OR cont_t.hw_contract_bussource_code IS NULL)
+    AND (sprt1.salesperson_id IS NOT NULL OR sprt2.salesperson_id IS NOT NULL)
+    AND fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q1|100';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q1|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q1|100';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q1|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q1|100';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q2|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.dtl_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: second detail tombstone from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
+    fact_t.period_id_qty, fact_t.business_id, fact_t.bill_type, fact_t.business_type,
+    fact_t.node_type, fact_t.invoice_type_id, fact_t.invoice_category, fact_t.invoice_type_name,
+    fact_t.salesperson_id, fact_t.company_id, fact_t.company_code, fact_t.company_name,
+    fact_t.cfs_salesperson_code, fact_t.cfs_salesperson_name,
+    fact_t.cfs_region_id, fact_t.cfs_region_code, fact_t.cfs_region_en_name,
+    fact_t.cfs_repoffice_code, fact_t.cfs_repoffice_en_name,
+    fact_t.region_code, fact_t.region_cn_name, fact_t.region_en_name,
+    fact_t.repoffice_code, fact_t.repoffice_cn_name, fact_t.repoffice_en_name,
+    fact_t.country_code, fact_t.country_cn_name, fact_t.country_en_name,
+    fact_t.bg_code, fact_t.bg_cn_name, fact_t.bg_en_name,
+    fact_t.customer_id, fact_t.customer_code, fact_t.customer_name, fact_t.customer_group_name,
+    fact_t.contract_id, fact_t.contract_number, fact_t.customer_pono,
+    fact_t.hw_contract_bussource_code, fact_t.project_number, fact_t.project_name,
+    fact_t.invoice_id, fact_t.invoice_no, fact_t.operator_application_id,
+    fact_t.application_code, fact_t.milestone_name,
+    fact_t.currency_id, fact_t.currency_code,
+    fact_t.usd_total_amount, fact_t.rmb_total_amount, fact_t.total_amount,
+    fact_t.creation_date, fact_t.submit_date, fact_t.applicant_time,
+    fact_t.con_mi_qty, fact_t.current_handler_id,
+    fact_t.current_handler_code, fact_t.current_handler_name,
+    fact_t.currentrole, fact_t.todo_billing_id, fact_t.payment_unit_id,
+    fact_t.source_code, fact_t.details_flag, fact_t.billing_status,
+    CURRENT_TIMESTAMP AS rtd_last_update_date,
+    true AS logical_is_deleted,
+    fact_t.src_cdc_event_date, fact_t.src_cdc_last_update_date,
+    CAST((extract(epoch from current_timestamp) * 1000) AS VARCHAR) AS _hoodie_event_time,
+    fact_t.frame_contract_no,
+    CAST(NULL AS VARCHAR) AS reason_code, CAST(NULL AS VARCHAR) AS sub_reason_code,
+    CAST(NULL AS VARCHAR) AS remarks, CAST(NULL AS VARCHAR) AS responsible_person,
+    CAST(NULL AS TIMESTAMP) AS estimated_resolution_time,
+    CAST(NULL AS VARCHAR) AS cfs_status, CAST(NULL AS BIGINT) AS sla,
+    CAST(NULL AS VARCHAR) AS reason_cn_name, CAST(NULL AS VARCHAR) AS reason_en_name,
+    CAST(NULL AS VARCHAR) AS sub_reason_cn_name, CAST(NULL AS VARCHAR) AS sub_reason_en_name,
+    CAST(NULL AS BIGINT) AS responsible_person_id, CAST(NULL AS VARCHAR) AS responsible_person_code,
+    fact_t.tax_invoice_date, fact_t.payment_unit_number
+FROM exp_ins.dtl_cw fact_t
+WHERE
+    (fact_t.node_type IN ('待审批')
+        AND NOT EXISTS (SELECT 1 FROM approval_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待寄送')
+        AND NOT EXISTS (SELECT 1 FROM send_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+    OR (fact_t.node_type IN ('待签返')
+        AND NOT EXISTS (SELECT 1 FROM countersign_temp_cw oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.dtl_cw _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q2|100';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q2|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q2|100';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q2|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(id), MAX(id), MIN(application_code), MAX(application_code), MIN(submit_date), MAX(submit_date), MIN(total_amount), MAX(total_amount) FROM exp_ins.dtl_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q2|100';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q3|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: third summary from maintained materialized tables
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM exp_ins.dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM fact_t_cw AS fact_t
+    LEFT JOIN exp_ins.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL '30 MINUTE'
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|100';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|100';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q3|100';
+SELECT '@@JOB5@@|B|insertion_only|query|crown|q4|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SET enable_nestloop = off;
+INSERT INTO exp_ins.sum_cw
+-- SOURCE_FILE: normal_test.sql + create_matview.sql
+-- SOURCE_OBJECT: fourth summary tombstone
+-- METHOD: logical_views | ivm
+-- QUERY_FORM: count
+-- TRANSFORMATIONS: removed INSERT target; reads incremental materialized views; dialect adaptation
+SELECT * FROM (
+SELECT
+    t.head_id, t.period_id, t.period_id_dd, t.period_id_qty,
+    t.bill_type, t.business_type, t.node_type,
+    t.invoice_category, t.invoice_type_name, t.company_code,
+    t.cfs_salesperson_code, t.cfs_salesperson_name,
+    t.cfs_region_id, t.cfs_region_code, t.cfs_region_en_name,
+    t.cfs_repoffice_code, t.cfs_repoffice_en_name,
+    t.region_code, t.region_cn_name, t.region_en_name,
+    t.repoffice_code, t.repoffice_cn_name, t.repoffice_en_name,
+    t.country_code, t.country_cn_name, t.country_en_name,
+    t.bg_code, t.bg_cn_name, t.bg_en_name,
+    t.customer_code, t.customer_name, t.customer_group_name,
+    t.contract_number, t.customer_pono,
+    t.hw_contract_bussource_code, t.project_number, t.project_name,
+    t.invoice_id, t.invoice_no, t.operator_application_id,
+    t.milestone_name, t.currency_code,
+    t.usd_total_amount, t.rmb_total_amount, t.total_amount,
+    t.creation_date, t.submit_date, t.applicant_time,
+    t.con_mi_qty, t.over_due_days,
+    t.current_handler_code, t.current_handler_name,
+    t.currentrole, t.todo_billing_id,
+    t.source_code, t.details_flag, t.billing_status,
+    t.rtd_last_update_date, true AS logical_is_deleted,
+    t.src_cdc_event_date, t.src_cdc_last_update_date,
+    t._hoodie_event_time, t.frame_contract_no,
+    t.reason_code, t.sub_reason_code, t.remarks, t.responsible_person,
+    t.estimated_resolution_time, t.cfs_status, t.sla,
+    t.reason_cn_name, t.reason_en_name,
+    t.sub_reason_cn_name, t.sub_reason_en_name,
+    t.responsible_person_id, t.responsible_person_code,
+    t.tax_invoice_date, t.payment_unit_number
+FROM exp_ins.sum_cw t
+INNER JOIN (
+    SELECT head_id, SUM(CASE WHEN logical_is_deleted IS TRUE THEN 0 ELSE 1 END) AS del_flag
+    FROM exp_ins.dtl_cw
+    GROUP BY head_id
+) t1 ON REPLACE(REPLACE(t.head_id, 'false', ''), 'true', '') = t1.head_id
+WHERE t1.del_flag = 0
+) AS _new WHERE NOT EXISTS (SELECT 1 FROM exp_ins.sum_cw _t WHERE _t.head_id = CAST(_new.head_id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
+SELECT '@@JOB5@@|E|insertion_only|query|crown|q4|100';
+SELECT '@@JOB5@@|B|insertion_only|count|crown|q4|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT COUNT(*) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|count|crown|q4|100';
+SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q4|100';
+SET search_path = exp_ins, public;
+SET query_dop = 32;
+SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM exp_ins.sum_cw;
+SELECT '@@JOB5@@|E|insertion_only|minmax|crown|q4|100';

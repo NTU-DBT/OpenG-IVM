@@ -1,0 +1,22 @@
+-- SOURCE_FILE: analyze_normal.sql
+-- TRANSFORMATIONS: openGauss ANALYZE
+
+ANALYZE s000_cqrs_cfs.cfs_cfg_company_t;
+ANALYZE s000_cqrs_cfs.cfs_cinv_customer_invoice_t;
+ANALYZE s000_cqrs_cfs.cfs_con_payment_unit_t;
+ANALYZE s000_cqrs_cfs.cfs_inv_invoice_info_t;
+ANALYZE s000_cqrs_cfs.cfs_opt_application_inst_t;
+ANALYZE s000_cqrs_cfs.cfs_opt_application_t;
+ANALYZE s000_cqrs_cfs.cfs_proc_node_define_t;
+ANALYZE s000_cqrs_cfs.cfs_proc_route_t;
+ANALYZE s000_cqrs_cfs.cfs_proc_task_t;
+ANALYZE s000_cqrs_cfs.tpl_fd_message_t;
+ANALYZE s000_cqrs_cfs.tpl_user_t;
+ANALYZE s000_dwt_hws_iao.cfs_comm_contract_t;
+ANALYZE s000_dwt_hws_iao.cfs_comm_currencies_t;
+ANALYZE s000_dwt_hws_iao.cfs_comm_customer_t;
+ANALYZE s000_dwt_hws_iao.cfs_comm_invtype_t;
+ANALYZE s000_dwt_hws_iao.cfs_salesperson_region_t;
+ANALYZE s000_dwt_hws_iao.dwd_billing_In_transit_dtl_t_05;
+ANALYZE s000_dwt_hws_iao.dwd_billing_In_transit_t_05;
+ANALYZE s000_dwt_hws_iao.dwd_job_status_t_05;

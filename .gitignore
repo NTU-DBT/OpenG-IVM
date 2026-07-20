@@ -1,0 +1,12 @@
+# Data and results are produced by the user, not committed
+/data/
+/results/
+/.scratch/
+# The portable generated_sql/<engine>/*.sql (with __DATA_ROOT__/__SCALE__
+# tokens) IS committed. Local absolute renders (gen_sql.py --absolute) go in
+# per-scale subdirs and are not committed:
+/generated_sql/*/scale_*/
+__pycache__/
+*.pyc
+*.duckdb
+.env
