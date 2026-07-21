@@ -56,38 +56,44 @@ Per engine under `results/<engine>/scale_0.1/`:
 ## Cost summary (per-step means, seconds)
 
 Three costs matter. **maint** = incremental maintenance (only `ivm`/`crown`).
-**count** = the count FORM total (q1–q4): `crown` computes it by aggregating
-the maintained partial counts along the join tree — no join is materialized —
-while the others count their view/table result. **build** = the accumulate
-INSERTs that materialize the full detail/summary output rows (q1–q4 total).
+**count** = the count FORM total (q1–q4): `crown` aggregates the maintained
+partial counts — no join materialized. **build** = the accumulate INSERTs that
+materialize the full detail/summary output rows (q1–q4 total). Q3's summary
+scope reads the maintained `crown_fact_ids` (distinct fact ids + fan-out count)
+and weights its SUMs by the count, so it never assembles the fact join.
 
 ### DuckDB
 
 | scenario | ivm maint / count / build | crown maint / count / build |
 |---|---|---|
-| insertion_only | 1.98 / 0.22 / 2.42 | 0.31 / 1.02 / 2.19 |
-| sliding_window | 0.57 / 0.04 / 0.21 | 0.51 / 0.07 / 0.33 |
-| preloaded_replacement_sliding | 3.49 / 0.44 / 5.76 | 0.54 / 2.45 / 5.58 |
+| insertion_only | 1.95 / 0.22 / 2.47 | 0.43 / 0.98 / 1.76 |
+| sliding_window | 0.57 / 0.04 / 0.22 | 0.57 / 0.07 / 0.31 |
+| preloaded_replacement_sliding | 3.54 / 0.45 / 5.81 | 0.73 / 2.43 / 4.83 |
 
 ### openGauss
 
 | scenario | ivm maint / count / build | crown maint / count / build |
 |---|---|---|
-| insertion_only | 6.43 / 10.37 / 11.56 | 1.15 / **1.05** / 19.03 |
-| sliding_window | 2.46 / 0.25 / 0.30 | 1.70 / 0.34 / 0.44 |
-| preloaded_replacement_sliding | 10.61 / 6.39 / 9.81 | 2.34 / **2.87** / 44.47 |
+| insertion_only | 6.46 / 7.82 / 9.06 | 2.00 / 2.17 / **4.65** |
+| sliding_window | 2.30 / 0.26 / 0.30 | 2.04 / 0.35 / 0.38 |
+| preloaded_replacement_sliding | 10.98 / 6.32 / 9.81 | 4.12 / 4.17 / **10.26** |
+
+Combined maintain+queries per step (openGauss): insertion **crown 6.65** vs
+ivm 15.51 vs recompute 46.69; preloaded **crown 14.38** vs ivm 20.79 vs
+recompute 111.35.
 
 Reading the numbers:
 
-- **Maintenance:** `crown` is ~3–5× cheaper than `ivm` everywhere — it does no
-  join work; `ivm` rebuilds joined rows including the n:m branch views.
-- **Count queries:** `crown` is cheapest of all methods on openGauss
-  (insertion 1.05 s vs `ivm` 10.37 s, `recompute` 45.6 s), because it never
-  assembles the join — the gap is driven by q3 (crown 0.26 s vs ivm 9.4 s).
-- **Build (emit full joined rows):** `ivm` wins on openGauss (reads a
-  materialized table vs `crown` re-joining at query time); on DuckDB the two
-  are close because the assembly join is cheap there.
+- **Maintenance:** `crown` is markedly cheaper than `ivm` everywhere (it does
+  no join work), even after adding `crown_fact_ids` upkeep.
+- **Count queries:** `crown` aggregates partial counts, never assembling the
+  join — well below `recompute`/`logical_views` on openGauss.
+- **Build:** with Q3's scope reading `crown_fact_ids` (not `fact_t_cw`), crown
+  no longer re-assembles the fact for the summary; its build dropped sharply on
+  openGauss (Q3 alone 36→2 s at preloaded), so `crown` now wins the combined
+  maintain+queries metric on both engines. `q1` still assembles the fact view
+  at query time to emit the full detail rows — the remaining build cost.
 
-Net: the more the workload leans on updates and count/aggregate queries, the
-more `crown` dominates; `ivm` pays off only when the full joined detail must be
-materialized frequently on an engine where large joins are costly.
+Net: `crown` is cheapest on maintenance and on count/aggregate queries, and now
+also wins the combined build+query total; the only residual cost is emitting the
+full detail rows (q1), which any method must pay.

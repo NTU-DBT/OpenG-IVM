@@ -10,75 +10,75 @@ Timings in seconds. `maintain` = incremental maintenance per step (recompute/log
 
 ## insertion_only  (20 steps)
 
-Shared costs: staging 89.5s, base_insert 78.9s, base_delete 0.0s, checkpoint 24.6s, analyze 0.0s. Method init (incl. indexes): logical_views 0.06s, ivm 0.06s, crown 0.12s.
+Shared costs: staging 91.0s, base_insert 78.8s, base_delete 0.0s, checkpoint 24.7s, analyze 0.0s. Method init (incl. indexes): logical_views 0.08s, ivm 0.07s, crown 0.13s.
 
 Accumulate-INSERT cost (builds the detail/summary output tables):
 
 | method | maintain/step | q1 | q2 | q3 | q4 | queries/step | maintain+queries/step |
 |---|---|---|---|---|---|---|---|
-| recompute | 0.000 | 1.116 | 0.198 | 0.707 | 0.022 | 2.042 | 2.042 |
-| logical_views | 0.000 | 1.220 | 0.204 | 0.681 | 0.021 | 2.125 | 2.125 |
-| ivm | 1.976 | 1.601 | 0.175 | 0.628 | 0.020 | 2.424 | 4.400 |
-| crown | 0.311 | 1.331 | 0.189 | 0.650 | 0.020 | 2.190 | 2.501 |
+| recompute | 0.000 | 1.107 | 0.197 | 0.703 | 0.023 | 2.030 | 2.030 |
+| logical_views | 0.000 | 1.225 | 0.202 | 0.689 | 0.021 | 2.137 | 2.137 |
+| ivm | 1.949 | 1.660 | 0.183 | 0.607 | 0.019 | 2.467 | 4.416 |
+| crown | 0.433 | 1.346 | 0.184 | 0.209 | 0.017 | 1.756 | 2.189 |
 
 Count-form cost (COUNT of the current result; crown aggregates partial counts instead of materializing the join):
 
 | method | cf_q1 | cf_q2 | cf_q3 | cf_q4 | count-form/step |
 |---|---|---|---|---|---|
-| recompute | 0.259 | 0.197 | 0.617 | 0.008 | 1.081 |
-| logical_views | 0.130 | 0.091 | 0.118 | 0.009 | 0.347 |
-| ivm | 0.114 | 0.051 | 0.048 | 0.008 | 0.222 |
-| crown | 0.936 | 0.047 | 0.025 | 0.010 | 1.018 |
+| recompute | 0.256 | 0.197 | 0.628 | 0.009 | 1.090 |
+| logical_views | 0.132 | 0.093 | 0.116 | 0.007 | 0.348 |
+| ivm | 0.110 | 0.052 | 0.049 | 0.008 | 0.220 |
+| crown | 0.904 | 0.045 | 0.019 | 0.008 | 0.976 |
 
-- ivm maintain per step: min 0.327s, median 1.789s, max 4.883s
-- crown maintain per step: min 0.223s, median 0.324s, max 0.380s
+- ivm maintain per step: min 0.313s, median 1.868s, max 4.529s
+- crown maintain per step: min 0.261s, median 0.420s, max 0.557s
 
 ## sliding_window  (20 steps)
 
-Shared costs: staging 167.9s, base_insert 80.1s, base_delete 6.6s, checkpoint 25.9s, analyze 0.0s. Method init (incl. indexes): logical_views 0.06s, ivm 0.06s, crown 0.12s.
+Shared costs: staging 169.4s, base_insert 80.3s, base_delete 6.8s, checkpoint 26.1s, analyze 0.0s. Method init (incl. indexes): logical_views 0.05s, ivm 0.06s, crown 0.14s.
 
 Accumulate-INSERT cost (builds the detail/summary output tables):
 
 | method | maintain/step | q1 | q2 | q3 | q4 | queries/step | maintain+queries/step |
 |---|---|---|---|---|---|---|---|
-| recompute | 0.000 | 0.160 | 0.091 | 0.103 | 0.014 | 0.368 | 0.368 |
-| logical_views | 0.000 | 0.184 | 0.076 | 0.095 | 0.013 | 0.367 | 0.367 |
-| ivm | 0.574 | 0.098 | 0.047 | 0.054 | 0.011 | 0.210 | 0.783 |
-| crown | 0.505 | 0.186 | 0.059 | 0.073 | 0.012 | 0.330 | 0.835 |
+| recompute | 0.000 | 0.167 | 0.094 | 0.116 | 0.014 | 0.391 | 0.391 |
+| logical_views | 0.000 | 0.183 | 0.082 | 0.104 | 0.012 | 0.382 | 0.382 |
+| ivm | 0.568 | 0.105 | 0.049 | 0.055 | 0.011 | 0.219 | 0.787 |
+| crown | 0.573 | 0.183 | 0.061 | 0.053 | 0.011 | 0.309 | 0.882 |
 
 Count-form cost (COUNT of the current result; crown aggregates partial counts instead of materializing the join):
 
 | method | cf_q1 | cf_q2 | cf_q3 | cf_q4 | count-form/step |
 |---|---|---|---|---|---|
-| recompute | 0.129 | 0.071 | 0.069 | 0.004 | 0.272 |
-| logical_views | 0.065 | 0.046 | 0.049 | 0.004 | 0.164 |
-| ivm | 0.017 | 0.012 | 0.006 | 0.004 | 0.038 |
-| crown | 0.036 | 0.018 | 0.008 | 0.004 | 0.065 |
+| recompute | 0.132 | 0.071 | 0.071 | 0.004 | 0.278 |
+| logical_views | 0.065 | 0.049 | 0.048 | 0.004 | 0.166 |
+| ivm | 0.018 | 0.013 | 0.006 | 0.004 | 0.041 |
+| crown | 0.037 | 0.020 | 0.006 | 0.004 | 0.067 |
 
-- ivm maintain per step: min 0.325s, median 0.595s, max 0.641s
-- crown maintain per step: min 0.193s, median 0.455s, max 0.766s
+- ivm maintain per step: min 0.295s, median 0.592s, max 0.627s
+- crown maintain per step: min 0.273s, median 0.539s, max 0.810s
 
 ## preloaded_replacement_sliding  (20 steps)
 
-Shared costs: staging 177.5s, base_insert 86.5s, base_delete 8.0s, checkpoint 30.6s, analyze 0.0s. Method init (incl. indexes): logical_views 0.06s, ivm 3.97s, crown 1.11s.
+Shared costs: staging 181.7s, base_insert 86.0s, base_delete 8.1s, checkpoint 30.9s, analyze 0.0s. Method init (incl. indexes): logical_views 0.05s, ivm 3.87s, crown 1.15s.
 
 Accumulate-INSERT cost (builds the detail/summary output tables):
 
 | method | maintain/step | q1 | q2 | q3 | q4 | queries/step | maintain+queries/step |
 |---|---|---|---|---|---|---|---|
-| recompute | 0.000 | 1.952 | 1.681 | 1.217 | 0.050 | 4.901 | 4.901 |
-| logical_views | 0.000 | 2.336 | 1.687 | 1.110 | 0.042 | 5.175 | 5.175 |
-| ivm | 3.489 | 2.858 | 1.862 | 0.992 | 0.043 | 5.755 | 9.245 |
-| crown | 0.543 | 2.595 | 1.843 | 1.101 | 0.042 | 5.582 | 6.125 |
+| recompute | 0.000 | 1.989 | 1.681 | 1.204 | 0.055 | 4.929 | 4.929 |
+| logical_views | 0.000 | 2.371 | 1.693 | 1.120 | 0.047 | 5.232 | 5.232 |
+| ivm | 3.538 | 2.894 | 1.847 | 1.027 | 0.042 | 5.810 | 9.347 |
+| crown | 0.732 | 2.682 | 1.705 | 0.395 | 0.044 | 4.825 | 5.557 |
 
 Count-form cost (COUNT of the current result; crown aggregates partial counts instead of materializing the join):
 
 | method | cf_q1 | cf_q2 | cf_q3 | cf_q4 | count-form/step |
 |---|---|---|---|---|---|
-| recompute | 0.256 | 0.466 | 1.088 | 0.029 | 1.839 |
-| logical_views | 0.212 | 0.157 | 0.216 | 0.025 | 0.609 |
-| ivm | 0.195 | 0.118 | 0.107 | 0.024 | 0.444 |
-| crown | 2.242 | 0.105 | 0.070 | 0.029 | 2.446 |
+| recompute | 0.256 | 0.467 | 1.105 | 0.029 | 1.857 |
+| logical_views | 0.222 | 0.159 | 0.218 | 0.026 | 0.625 |
+| ivm | 0.205 | 0.111 | 0.110 | 0.026 | 0.452 |
+| crown | 2.259 | 0.100 | 0.045 | 0.028 | 2.431 |
 
-- ivm maintain per step: min 2.656s, median 3.464s, max 4.649s
-- crown maintain per step: min 0.499s, median 0.540s, max 0.587s
+- ivm maintain per step: min 2.712s, median 3.385s, max 4.800s
+- crown maintain per step: min 0.680s, median 0.730s, max 0.810s
