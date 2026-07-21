@@ -2783,6 +2783,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|5';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -2824,11 +2827,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|5';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|5';
@@ -3330,6 +3333,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|10';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -3371,11 +3377,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|10';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|10';
@@ -3877,6 +3883,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|15';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -3918,11 +3927,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|15';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|15';
@@ -4424,6 +4433,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|20';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -4465,11 +4477,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|20';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|20';
@@ -4971,6 +4983,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|25';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -5012,11 +5027,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|25';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|25';
@@ -5518,6 +5533,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|30';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -5559,11 +5577,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|30';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|30';
@@ -6065,6 +6083,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|35';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -6106,11 +6127,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|35';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|35';
@@ -6612,6 +6633,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|40';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -6653,11 +6677,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|40';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|40';
@@ -7159,6 +7183,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|45';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -7200,11 +7227,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|45';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|45';
@@ -7706,6 +7733,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|50';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -7747,11 +7777,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|50';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|50';
@@ -8253,6 +8283,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|55';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -8294,11 +8327,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|55';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|55';
@@ -8800,6 +8833,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|60';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -8841,11 +8877,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|60';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|60';
@@ -9347,6 +9383,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|65';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -9388,11 +9427,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|65';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|65';
@@ -9894,6 +9933,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|70';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -9935,11 +9977,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|70';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|70';
@@ -10441,6 +10483,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|75';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -10482,11 +10527,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|75';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|75';
@@ -10988,6 +11033,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|80';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -11029,11 +11077,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|80';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|80';
@@ -11535,6 +11583,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|85';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -11576,11 +11627,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|85';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|85';
@@ -12082,6 +12133,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|90';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -12123,11 +12177,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|90';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|90';
@@ -12629,6 +12683,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|95';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -12670,11 +12727,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|95';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|95';
@@ -13176,6 +13233,9 @@ WHERE
 ) AS _new WHERE NOT EXISTS (SELECT 1 FROM dtl_lv _t WHERE _t.id = CAST(_new.id AS VARCHAR) AND _t.logical_is_deleted = _new.logical_is_deleted);
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|query|logical_views|q2|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|count|logical_views|q2|100';
+WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),
+     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)
 SELECT COUNT(*) AS cnt FROM (
 SELECT
     fact_t.id, fact_t.head_id, fact_t.period_id, fact_t.period_id_dd,
@@ -13217,11 +13277,11 @@ SELECT
 FROM dtl_lv fact_t
 WHERE
     (fact_t.node_type IN ('待审批')
-        AND NOT EXISTS (SELECT 1 FROM approval_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _appr_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待寄送')
-        AND NOT EXISTS (SELECT 1 FROM send_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _send_ids oa WHERE oa.id = fact_t.id))
     OR (fact_t.node_type IN ('待签返')
-        AND NOT EXISTS (SELECT 1 FROM countersign_temp_lv oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id))
+        AND NOT EXISTS (SELECT 1 FROM _cs_ids oa WHERE oa.id = fact_t.id))
 ) AS q;
 SELECT '@@JOB5@@|E|preloaded_replacement_sliding|count|logical_views|q2|100';
 SELECT '@@JOB5@@|B|preloaded_replacement_sliding|minmax|logical_views|q2|100';

@@ -262,6 +262,20 @@ def count_form_sql(method, qname, dtl_table, sum_table):
         if suffix != "_mv":
             for v in MV_NAMES:
                 sql = sql.replace(v, v.replace("_mv", suffix))
+        if method == "logical_views" and qname == "q2":
+            # same fix as build_query_insert: DuckDB re-expands the view chain
+            # for the OR-connected correlated NOT EXISTS over views (400s+/step);
+            # pre-materialize the view id-sets as CTEs (identical result).
+            for view, cte in (("approval_temp_lv", "_appr_ids"),
+                              ("send_temp_lv", "_send_ids"),
+                              ("countersign_temp_lv", "_cs_ids")):
+                sql = sql.replace(
+                    f"NOT EXISTS (SELECT 1 FROM {view} oa WHERE oa.logical_is_deleted_del IS FALSE AND oa.id = fact_t.id)",
+                    f"NOT EXISTS (SELECT 1 FROM {cte} oa WHERE oa.id = fact_t.id)")
+            sql = ("WITH _appr_ids AS MATERIALIZED (SELECT id FROM approval_temp_lv WHERE logical_is_deleted_del IS FALSE),\n"
+                   "     _send_ids AS MATERIALIZED (SELECT id FROM send_temp_lv WHERE logical_is_deleted_del IS FALSE),\n"
+                   "     _cs_ids   AS MATERIALIZED (SELECT id FROM countersign_temp_lv WHERE logical_is_deleted_del IS FALSE)\n"
+                   + sql)
     sql = sql.replace("s000_dwt_hws_iao.dwd_billing_in_transit_dtl_t_05", dtl_table)
     sql = sql.replace("s000_dwt_hws_iao.dwd_billing_in_transit_t_05", sum_table)
     return sql
