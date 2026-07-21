@@ -35,42 +35,59 @@ same query results. Timings will differ with hardware/server configuration.
 
 ## Correctness
 
-Both runners assert cross-method result equality at every step and compare the
-accumulated detail/summary tables (and `fact_t`) as multisets at the end:
-**42/42 checks pass (21 per engine), 0 differing rows.** See each
-`checks.csv`.
+Every step, all four methods are checked for identical results two ways: the
+count + min/max of the accumulated outputs, and the **count FORM** of each
+query (the current-result COUNT). At the end the accumulated detail/summary
+tables and `fact_t` are compared as multisets. **All checks pass on both
+engines, 0 differing rows** (`checks.csv` holds the 21 final multiset
+comparisons per engine; per-step count-form and accumulate mismatches, of
+which there are none, would also appear there).
 
 ## Result files
 
 Per engine under `results/<engine>/scale_0.1/`:
 
-- `metrics.csv` — per-region timings (`scenario, step, phase, method, qname, seconds`)
+- `metrics.csv` — per-region timings (`scenario, step, phase, method, qname, seconds`);
+  phase `query` = accumulate INSERT (builds output), `count_query` = count form, `maintain` = incremental maintenance
 - `checks.csv` — correctness checks (`mismatches` is 0 throughout)
 - `report.md` — per-scenario cost tables (from `summarize.py`)
 - `<scenario>.log` — per-step run log
 
-## Cost summary (per-step means, seconds; mnt = maintenance, qry = q1–q4)
+## Cost summary (per-step means, seconds)
 
-Maintenance is incremental only for `ivm` and `crown` (`recompute` /
-`logical_views` recompute at query time, so their cost is all in `qry`).
+Three costs matter. **maint** = incremental maintenance (only `ivm`/`crown`).
+**count** = the count FORM total (q1–q4): `crown` computes it by aggregating
+the maintained partial counts along the join tree — no join is materialized —
+while the others count their view/table result. **build** = the accumulate
+INSERTs that materialize the full detail/summary output rows (q1–q4 total).
 
 ### DuckDB
 
-| scenario | recompute qry | logical_views qry | ivm mnt / qry | crown mnt / qry |
-|---|---|---|---|---|
-| insertion_only | 2.03 | 2.13 | 1.95 / 2.43 | 0.31 / 2.21 |
-| sliding_window | 0.38 | 0.37 | 0.56 / 0.21 | 0.49 / 0.32 |
-| preloaded_replacement_sliding | 4.89 | 5.12 | 3.47 / 5.78 | 0.54 / 5.54 |
+| scenario | ivm maint / count / build | crown maint / count / build |
+|---|---|---|
+| insertion_only | 1.98 / 0.22 / 2.42 | 0.31 / 1.02 / 2.19 |
+| sliding_window | 0.57 / 0.04 / 0.21 | 0.51 / 0.07 / 0.33 |
+| preloaded_replacement_sliding | 3.49 / 0.44 / 5.76 | 0.54 / 2.45 / 5.58 |
 
 ### openGauss
 
-| scenario | recompute qry | logical_views qry | ivm mnt / qry | crown mnt / qry |
-|---|---|---|---|---|
-| insertion_only | 46.61 | 21.98 | 6.54 / 9.03 | 1.14 / 18.93 |
-| sliding_window | 1.08 | 1.13 | 2.37 / 0.30 | 1.65 / 0.44 |
-| preloaded_replacement_sliding | 112.20 | 53.04 | 11.09 / 9.64 | 2.39 / 44.69 |
+| scenario | ivm maint / count / build | crown maint / count / build |
+|---|---|---|
+| insertion_only | 6.43 / 10.37 / 11.56 | 1.15 / **1.05** / 19.03 |
+| sliding_window | 2.46 / 0.25 / 0.30 | 1.70 / 0.34 / 0.44 |
+| preloaded_replacement_sliding | 10.61 / 6.39 / 9.81 | 2.34 / **2.87** / 44.47 |
 
-Across both engines, `crown` maintenance is markedly cheaper than `ivm` in the
-insert-dominated scenarios (e.g. openGauss preloaded: 2.4 s vs 11.1 s per step)
-and comparable in the FIFO sliding window; `ivm`'s materialized tables give it
-the cheapest query side, while `crown` stays well below full recomputation.
+Reading the numbers:
+
+- **Maintenance:** `crown` is ~3–5× cheaper than `ivm` everywhere — it does no
+  join work; `ivm` rebuilds joined rows including the n:m branch views.
+- **Count queries:** `crown` is cheapest of all methods on openGauss
+  (insertion 1.05 s vs `ivm` 10.37 s, `recompute` 45.6 s), because it never
+  assembles the join — the gap is driven by q3 (crown 0.26 s vs ivm 9.4 s).
+- **Build (emit full joined rows):** `ivm` wins on openGauss (reads a
+  materialized table vs `crown` re-joining at query time); on DuckDB the two
+  are close because the assembly join is cheap there.
+
+Net: the more the workload leans on updates and count/aggregate queries, the
+more `crown` dominates; `ivm` pays off only when the full joined detail must be
+materialized frequently on an engine where large joins are costly.
