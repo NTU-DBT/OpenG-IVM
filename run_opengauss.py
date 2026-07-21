@@ -271,7 +271,7 @@ def build_view_insert(schema, qname, dtl, sm, suffix):
     for v in MV_NAMES:
         sql = sql.replace(v, v.replace("_mv", suffix))
     if suffix == "_cw" and qname == "q3":
-        sql = crown_maintain.crown_q3_rebind(sql)  # scope reads crown_fact_ids
+        sql = crown_maintain.crown_q3_rebind(sql, count_form=False)  # scope reads crown_fact_ids
     return qsp(schema) + _fixup_insert(sql, schema, qname, dtl, sm)
 
 
@@ -313,7 +313,7 @@ def count_form_sql(schema, method, qname, dtl, sm):
             for v in MV_NAMES:
                 sql = sql.replace(v, v.replace("_mv", suffix))
         if method == "crown" and qname == "q3":
-            sql = crown_maintain.crown_q3_rebind(sql)  # scope reads crown_fact_ids
+            sql = crown_maintain.crown_q3_rebind(sql, count_form=True)  # scope reads crown_fact_ids
     sql = rebind(sql, schema)
     sql = sql.replace(f"{schema}.dwd_billing_in_transit_dtl_t_05", f"{schema}.{dtl}")
     sql = sql.replace(f"{schema}.dwd_billing_in_transit_t_05", f"{schema}.{sm}")
@@ -409,7 +409,7 @@ def run_scenario(scenario):
     emit(0, "init_index", "crown", "", ix)
     lv_text = read_sql("sql/opengauss/logical_views/init.sql")
     gsql(sp(schema) + crown_maintain.opengauss_assembly_views_sql(lv_text, schema), "crown/views")
-    ms, _ = gsql_timed(sp(schema) + crown_maintain.fact_ids_init_sql(), "crown/fact_ids")
+    ms, _ = gsql_timed(sp(schema) + crown_maintain.fact_ids_init_sql("opengauss"), "crown/fact_ids")
     emit(0, "init_index", "crown", "", ms)
     say("init done")
 

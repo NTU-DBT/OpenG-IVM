@@ -156,7 +156,7 @@ def init_method_sql(method):
         lv_text = strip_comments(read_sql("sql/duckdb/logical_views/init.sql"))
         return (crown_maintain.duckdb_state_init_sql()
                 + crown_maintain.duckdb_assembly_views_sql(lv_text)
-                + "\n" + crown_maintain.fact_ids_init_sql())
+                + "\n" + crown_maintain.fact_ids_init_sql("duckdb"))
     return ""
 
 
@@ -211,7 +211,7 @@ def build_query_insert(method, qname, dtl_table, sum_table):
         if method == "crown" and qname == "q3":
             # q3's scope needs only fact ids: read the maintained crown_fact_ids
             # bag instead of assembling fact_t_cw
-            sql = crown_maintain.crown_q3_rebind(sql)
+            sql = crown_maintain.crown_q3_rebind(sql, count_form=False)
     target = dtl_table if qname in ("q1", "q2") else sum_table
     pk_col = "id" if qname in ("q1", "q2") else "head_id"
 
@@ -269,7 +269,7 @@ def count_form_sql(method, qname, dtl_table, sum_table):
             for v in MV_NAMES:
                 sql = sql.replace(v, v.replace("_mv", suffix))
         if method == "crown" and qname == "q3":
-            sql = crown_maintain.crown_q3_rebind(sql)
+            sql = crown_maintain.crown_q3_rebind(sql, count_form=True)
         if method == "logical_views" and qname == "q2":
             # same fix as build_query_insert: DuckDB re-expands the view chain
             # for the OR-connected correlated NOT EXISTS over views (400s+/step);

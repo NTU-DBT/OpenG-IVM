@@ -60,28 +60,52 @@ def _oa_cols(prefix="oa."):
 #
 # Q3's scope needs only fact_t.id (+ cdc for the watermark), but as a *bag*:
 # fact_t is a UNION ALL of three branch views and its id fan-out (n:m tic in
-# countersign, 1:n task in approval) is real, so the scope join multiplicity
-# must be preserved to match ivm/recompute. We therefore materialize just the
-# id projection `crown_fact_ids(id, cdc_last_update_date, node_type)` — never
-# the full 35-column fact_t_cw — and maintain it with three per-branch rules:
-# each step we recompute the id rows of the branches for the affected keys and
-# delete+reinsert them. The branch views are the crown assembly views, so
-# re-deriving only the affected ids is delta-bounded.
+# countersign, 1:n task in approval) is real: the non-distinct scope join
+# multiplies the summary SUMs, and ivm/recompute reproduce that, so crown must
+# too. Rather than store the exploded bag, we use derivation counting: keep the
+# DISTINCT fact ids each annotated with their fan-out count, and apply the count
+# during query evaluation (SUM(x * cnt)). State is one row per live fact id:
+#   crown_fact_ids(id, cdc_last_update_date, cnt)
+# never the full 35-column fact_t_cw. It is maintained with three per-branch
+# rules that recompute (id, cdc, cnt) for the affected ids from the crown state:
+# cnt = task-count (approval), mes-count (send), DISTINCT-tic-count per
+# application_code (countersign) — a per-key count lookup, no fan-out.
 
-FACT_ID_BRANCHES = ["approval_temp_cw", "send_temp_cw", "countersign_temp_cw"]
+
+def _fid_branch_selects(pc, id_filter=""):
+    """Per-branch SELECT of (id, cdc, cnt) over the alive inst-core. id_filter
+    optionally restricts to a set of application_inst_ids (incremental case)."""
+    base = (f"FROM crown_vs_oa oa\n"
+            f"JOIN {pc}cfs_opt_application_inst_t opii"
+            f" ON opii.operator_application_id = oa.operator_application_id")
+    idcdc = ("opii.application_inst_id AS id,"
+             " GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date")
+    return [
+        f"""SELECT {idcdc}, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+{base}
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM {pc}cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii{id_filter}""",
+        f"""SELECT {idcdc}, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+{base}
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp{id_filter}""",
+        f"""SELECT {idcdc}, COALESCE(ti.c, 0) AS cnt
+{base}
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic{id_filter}""",
+    ]
 
 
-def fact_ids_init_sql():
-    """Initial population = id projection of the three branch views (not
-    fact_t_cw itself)."""
-    return "CREATE TABLE crown_fact_ids AS\n" + "\nUNION ALL ".join(
-        f"SELECT id, cdc_last_update_date, node_type FROM {v}" for v in FACT_ID_BRANCHES) + ";"
+def fact_ids_init_sql(dialect):
+    """Initial population: distinct live fact ids with cdc and fan-out count."""
+    pc = "s000_cqrs_cfs." if dialect == "duckdb" else ""
+    return "CREATE TABLE crown_fact_ids AS\n" + "\nUNION ALL\n".join(_fid_branch_selects(pc)) + ";"
 
 
 def fact_ids_maintain_sql(dialect):
-    """Three-rule incremental maintenance of crown_fact_ids. Run after the
-    crown state maintenance (so the branch views reflect the new state); reads
-    this step's staged deltas."""
+    """Three-rule incremental maintenance of crown_fact_ids (derivation
+    counting). Run after the crown state maintenance; reads this step's deltas."""
     dd = dialect == "duckdb"
     ins = "_ins_" if dd else "mlog_ins_"
     dl = "_del_" if dd else "mlog_del_"
@@ -94,17 +118,17 @@ def fact_ids_maintain_sql(dialect):
 
     p = []
     w = p.append
-    # application_codes touched this step (affect tic / temp membership)
+    # application_codes touched this step (affect tic / temp counts)
     w(mk("_fi_codes", f"""SELECT DISTINCT application_code FROM (
   SELECT application_code FROM {ins}cinv UNION ALL SELECT application_code FROM {dl}cinv
   UNION ALL SELECT application_code FROM {ins}inv UNION ALL SELECT application_code FROM {dl}inv) u"""))
-    # work-flow proc_inst_ids touched this step (affect approval task fan-out)
+    # work-flow proc_inst_ids touched this step (affect approval task count)
     w(mk("_fi_wf", f"""SELECT DISTINCT proc_inst_id FROM (
   SELECT proc_inst_id FROM {ins}task UNION ALL SELECT proc_inst_id FROM {dl}task
   UNION ALL SELECT t.proc_inst_id FROM {pc}cfs_proc_task_t t
     WHERE t.route_id IN (SELECT route_id FROM {ins}route UNION ALL SELECT route_id FROM {dl}route)) u"""))
     # affected oa: changed directly, or via code (tic/temp), work_flow (task),
-    # or a change to the mes singleton (which scales the send fan-out)
+    # or a change to the mes singleton (which scales the send count)
     w(mk("_fi_oa", f"""SELECT DISTINCT operator_application_id FROM (
   SELECT operator_application_id FROM {ins}app UNION ALL SELECT operator_application_id FROM {dl}app
   UNION ALL SELECT operator_application_id FROM {ins}inst UNION ALL SELECT operator_application_id FROM {dl}inst
@@ -119,11 +143,11 @@ def fact_ids_maintain_sql(dialect):
     WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
   UNION ALL SELECT application_inst_id FROM {ins}inst
   UNION ALL SELECT application_inst_id FROM {dl}inst) u"""))
-    # three rules: drop the affected ids, then re-derive them per branch view
+    # three rules: drop the affected ids, then re-derive (id, cdc, cnt) per branch
     w("DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);")
-    for v in FACT_ID_BRANCHES:
-        w(f"INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type"
-          f" FROM {v} WHERE id IN (SELECT id FROM _fi_ids);")
+    idf = " AND opii.application_inst_id IN (SELECT id FROM _fi_ids)"
+    for sel in _fid_branch_selects(pc, idf):
+        w(f"INSERT INTO crown_fact_ids\n{sel};")
     for t in ("_fi_codes", "_fi_wf", "_fi_oa", "_fi_ids"):
         w(f"DROP TABLE IF EXISTS {t};")
     return "\n".join(p)
@@ -222,11 +246,20 @@ WHERE {alive}
     raise ValueError(qname)
 
 
-def crown_q3_rebind(sql):
-    """Point the generic q3 scope at the maintained id table instead of
-    assembling fact_t_cw (used for both the accumulate build and the count
-    form of crown's q3)."""
-    return sql.replace("fact_t_cw", "crown_fact_ids")
+def crown_q3_rebind(sql, count_form=False):
+    """Point the generic q3 scope at the maintained id view instead of
+    assembling fact_t_cw. For the count form the group set is unchanged, so we
+    just swap the table (distinct ids). For the row-producing build we carry the
+    fan-out count from the view and weight the SUM aggregates by it, so a single
+    (distinct) join reproduces the multiset SUMs (MAX and DISTINCT string_agg
+    are multiplicity-invariant; other string_aggs are excluded from checks)."""
+    if count_form:
+        return sql.replace("fact_t_cw", "crown_fact_ids")
+    sql = sql.replace("fact_t.id\n    FROM fact_t_cw AS fact_t",
+                      "fact_t.id, fact_t.cnt\n    FROM crown_fact_ids AS fact_t")
+    for col in ("usd_total_amount", "rmb_total_amount", "total_amount", "con_mi_qty"):
+        sql = sql.replace(f"SUM(t.{col})", f"SUM(t.{col} * scp.cnt)")
+    return sql.replace("fact_t_cw", "crown_fact_ids")  # safety for any remainder
 
 
 def _crown_view_rebind(sql, base_ref):

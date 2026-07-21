@@ -1433,9 +1433,24 @@ SELECT id, head_id, application_code, period_id, period_id_dd, period_id_qty,
     cdc_last_update_date, tax_invoice_date, payment_unit_number
 FROM countersign_temp_cw;
 CREATE TABLE crown_fact_ids AS
-SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw
-UNION ALL SELECT id, cdc_last_update_date, node_type FROM send_temp_cw
-UNION ALL SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw;
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii
+UNION ALL
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp
+UNION ALL
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic;
 SELECT '@@JOB5@@|E|sliding_window|init_method|crown||0';
 SELECT '@@JOB5@@|B|sliding_window|staging|crown||5';
 CREATE OR REPLACE TEMP TABLE _ins_company AS SELECT * FROM read_csv(['__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_cfg_company_t.csv'], header=true, columns={'company_id': 'BIGINT', 'company_abbr': 'VARCHAR', 'company_address': 'VARCHAR', 'company_name_zh': 'VARCHAR', 'company_address_zh': 'VARCHAR', 'company_code': 'VARCHAR', 'detail': 'VARCHAR', 'integrate_invoice_flag': 'VARCHAR', 'integrate_receipt_flag': 'VARCHAR', 'exchange_flag': 'VARCHAR', 'fax': 'VARCHAR', 'fax_area': 'VARCHAR', 'enable_flag': 'VARCHAR', 'global_flag': 'VARCHAR', 'internal_flag': 'VARCHAR', 'tax_invoice_active': 'VARCHAR', 'memo_line_id': 'BIGINT', 'company_name': 'VARCHAR', 'orgid': 'BIGINT', 'remark': 'VARCHAR', 'sign_flag': 'VARCHAR', 'sob_id': 'BIGINT', 'tel': 'VARCHAR', 'tel_area': 'VARCHAR', 'use_flag': 'INTEGER', 'currency_id': 'BIGINT', 'exchange_type': 'INTEGER', 'invoice_account_type': 'VARCHAR', 'schedule_tax_flag': 'VARCHAR', 'version': 'INTEGER', 'source': 'VARCHAR', 'created_by': 'BIGINT', 'creation_date': 'TIMESTAMP', 'last_update_date': 'TIMESTAMP', 'last_updated_by': 'BIGINT', 'description': 'VARCHAR', 'dm_memo_line_id': 'BIGINT', 'short_name': 'VARCHAR', 'ou_name': 'VARCHAR', 'organization_id': 'BIGINT', 'cdc_last_update_date': 'TIMESTAMP', 'logical_is_deleted': 'BOOLEAN', '_hoodie_event_time': 'VARCHAR'});
@@ -1689,9 +1704,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -1914,9 +1945,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -1936,7 +1967,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -2339,9 +2370,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -2564,9 +2611,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -2586,7 +2633,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -3002,9 +3049,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -3227,9 +3290,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -3249,7 +3312,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -3665,9 +3728,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -3890,9 +3969,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -3912,7 +3991,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -4328,9 +4407,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -4553,9 +4648,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -4575,7 +4670,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -4991,9 +5086,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -5216,9 +5327,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -5238,7 +5349,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -5654,9 +5765,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -5879,9 +6006,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -5901,7 +6028,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -6317,9 +6444,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -6542,9 +6685,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -6564,7 +6707,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -6980,9 +7123,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -7205,9 +7364,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -7227,7 +7386,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -7643,9 +7802,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -7868,9 +8043,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -7890,7 +8065,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -8306,9 +8481,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -8531,9 +8722,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -8553,7 +8744,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -8969,9 +9160,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -9194,9 +9401,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -9216,7 +9423,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -9632,9 +9839,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -9857,9 +10080,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -9879,7 +10102,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -10295,9 +10518,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -10520,9 +10759,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -10542,7 +10781,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -10958,9 +11197,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -11183,9 +11438,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -11205,7 +11460,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -11621,9 +11876,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -11846,9 +12117,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -11868,7 +12139,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -12284,9 +12555,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -12509,9 +12796,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -12531,7 +12818,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -12947,9 +13234,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -13172,9 +13475,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -13194,7 +13497,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -13610,9 +13913,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -13835,9 +14154,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -13857,7 +14176,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
@@ -14273,9 +14592,25 @@ CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
   UNION ALL SELECT application_inst_id FROM _ins_inst
   UNION ALL SELECT application_inst_id FROM _del_inst) u;
 DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
-INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, COALESCE(tk.c, 0)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT proc_inst_id, COUNT(*) c FROM s000_cqrs_cfs.cfs_proc_task_t GROUP BY proc_inst_id) tk
+       ON tk.proc_inst_id = oa.work_flow_id
+WHERE oa.status = 30 AND oa.flag_opii AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, GREATEST(1, (SELECT COUNT(*) FROM crown_mes)) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+WHERE oa.status = 40 AND oa.flag_opii AND oa.flag_temp AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids
+SELECT opii.application_inst_id AS id, GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) AS cdc_last_update_date, COALESCE(ti.c, 0) AS cnt
+FROM crown_vs_oa oa
+JOIN s000_cqrs_cfs.cfs_opt_application_inst_t opii ON opii.operator_application_id = oa.operator_application_id
+LEFT JOIN (SELECT application_code, COUNT(*) c FROM crown_vp_tic GROUP BY application_code) ti
+       ON ti.application_code = oa.application_code
+WHERE oa.status = 50 AND oa.flag_opii AND oa.flag_tic AND opii.application_inst_id IN (SELECT id FROM _fi_ids);
 DROP TABLE IF EXISTS _fi_codes;
 DROP TABLE IF EXISTS _fi_wf;
 DROP TABLE IF EXISTS _fi_oa;
@@ -14498,9 +14833,9 @@ SELECT
     SUBSTR(string_agg(t.project_name, ','), 1, 1000),
     MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
     MAX(t.milestone_name), MAX(t.currency_code),
-    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    SUM(t.usd_total_amount * scp.cnt), SUM(t.rmb_total_amount * scp.cnt), SUM(t.total_amount * scp.cnt),
     MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
-    SUM(t.con_mi_qty),
+    SUM(t.con_mi_qty * scp.cnt),
     CAST(NULL AS BIGINT) AS over_due_days,
     MAX(t.current_handler_code), MAX(t.current_handler_name),
     MAX(t.currentrole), MAX(t.todo_billing_id),
@@ -14520,7 +14855,7 @@ SELECT
     SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
 FROM dtl_cw t
 INNER JOIN (
-    SELECT fact_t.id
+    SELECT fact_t.id, fact_t.cnt
     FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
