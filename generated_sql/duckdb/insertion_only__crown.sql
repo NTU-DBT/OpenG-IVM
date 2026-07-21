@@ -1432,6 +1432,10 @@ SELECT id, head_id, application_code, period_id, period_id_dd, period_id_qty,
     source_code, details_flag, billing_status, logical_is_deleted,
     cdc_last_update_date, tax_invoice_date, payment_unit_number
 FROM countersign_temp_cw;
+CREATE TABLE crown_fact_ids AS
+SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw
+UNION ALL SELECT id, cdc_last_update_date, node_type FROM send_temp_cw
+UNION ALL SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw;
 SELECT '@@JOB5@@|E|insertion_only|init_method|crown||0';
 SELECT '@@JOB5@@|B|insertion_only|staging|crown||5';
 CREATE OR REPLACE TEMP TABLE _ins_company AS SELECT * FROM read_csv(['__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_001/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_002/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_003/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_004/s000_cqrs_cfs.cfs_cfg_company_t.csv', '__DATA_ROOT__/scale___SCALE__/dynamic/base/pct_005/s000_cqrs_cfs.cfs_cfg_company_t.csv'], header=true, columns={'company_id': 'BIGINT', 'company_abbr': 'VARCHAR', 'company_address': 'VARCHAR', 'company_name_zh': 'VARCHAR', 'company_address_zh': 'VARCHAR', 'company_code': 'VARCHAR', 'detail': 'VARCHAR', 'integrate_invoice_flag': 'VARCHAR', 'integrate_receipt_flag': 'VARCHAR', 'exchange_flag': 'VARCHAR', 'fax': 'VARCHAR', 'fax_area': 'VARCHAR', 'enable_flag': 'VARCHAR', 'global_flag': 'VARCHAR', 'internal_flag': 'VARCHAR', 'tax_invoice_active': 'VARCHAR', 'memo_line_id': 'BIGINT', 'company_name': 'VARCHAR', 'orgid': 'BIGINT', 'remark': 'VARCHAR', 'sign_flag': 'VARCHAR', 'sob_id': 'BIGINT', 'tel': 'VARCHAR', 'tel_area': 'VARCHAR', 'use_flag': 'INTEGER', 'currency_id': 'BIGINT', 'exchange_type': 'INTEGER', 'invoice_account_type': 'VARCHAR', 'schedule_tax_flag': 'VARCHAR', 'version': 'INTEGER', 'source': 'VARCHAR', 'created_by': 'BIGINT', 'creation_date': 'TIMESTAMP', 'last_update_date': 'TIMESTAMP', 'last_updated_by': 'BIGINT', 'description': 'VARCHAR', 'dm_memo_line_id': 'BIGINT', 'short_name': 'VARCHAR', 'ou_name': 'VARCHAR', 'organization_id': 'BIGINT', 'cdc_last_update_date': 'TIMESTAMP', 'logical_is_deleted': 'BOOLEAN', '_hoodie_event_time': 'VARCHAR'});
@@ -1663,6 +1667,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||5';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|5';
 INSERT INTO dtl_cw
@@ -1904,7 +1937,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -1913,17 +1946,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|5';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|5';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|5';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|5';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -2246,6 +2317,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||10';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|10';
 INSERT INTO dtl_cw
@@ -2487,7 +2587,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -2496,17 +2596,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|10';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|10';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|10';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|10';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -2829,6 +2967,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||15';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|15';
 INSERT INTO dtl_cw
@@ -3070,7 +3237,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -3079,17 +3246,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|15';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|15';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|15';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|15';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3412,6 +3617,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||20';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|20';
 INSERT INTO dtl_cw
@@ -3653,7 +3887,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -3662,17 +3896,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|20';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|20';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|20';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|20';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -3995,6 +4267,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||25';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|25';
 INSERT INTO dtl_cw
@@ -4236,7 +4537,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -4245,17 +4546,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|25';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|25';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|25';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|25';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -4578,6 +4917,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||30';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|30';
 INSERT INTO dtl_cw
@@ -4819,7 +5187,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -4828,17 +5196,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|30';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|30';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|30';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|30';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5161,6 +5567,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||35';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|35';
 INSERT INTO dtl_cw
@@ -5402,7 +5837,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -5411,17 +5846,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|35';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|35';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|35';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|35';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -5744,6 +6217,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||40';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|40';
 INSERT INTO dtl_cw
@@ -5985,7 +6487,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -5994,17 +6496,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|40';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|40';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|40';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|40';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6327,6 +6867,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||45';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|45';
 INSERT INTO dtl_cw
@@ -6568,7 +7137,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -6577,17 +7146,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|45';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|45';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|45';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|45';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -6910,6 +7517,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||50';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|50';
 INSERT INTO dtl_cw
@@ -7151,7 +7787,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -7160,17 +7796,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|50';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|50';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|50';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|50';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -7493,6 +8167,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||55';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|55';
 INSERT INTO dtl_cw
@@ -7734,7 +8437,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -7743,17 +8446,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|55';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|55';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|55';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|55';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8076,6 +8817,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||60';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|60';
 INSERT INTO dtl_cw
@@ -8317,7 +9087,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -8326,17 +9096,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|60';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|60';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|60';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|60';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -8659,6 +9467,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||65';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|65';
 INSERT INTO dtl_cw
@@ -8900,7 +9737,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -8909,17 +9746,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|65';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|65';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|65';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|65';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9242,6 +10117,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||70';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|70';
 INSERT INTO dtl_cw
@@ -9483,7 +10387,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -9492,17 +10396,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|70';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|70';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|70';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|70';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -9825,6 +10767,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||75';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|75';
 INSERT INTO dtl_cw
@@ -10066,7 +11037,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -10075,17 +11046,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|75';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|75';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|75';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|75';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10408,6 +11417,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||80';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|80';
 INSERT INTO dtl_cw
@@ -10649,7 +11687,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -10658,17 +11696,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|80';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|80';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|80';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|80';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -10991,6 +12067,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||85';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|85';
 INSERT INTO dtl_cw
@@ -11232,7 +12337,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -11241,17 +12346,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|85';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|85';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|85';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|85';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -11574,6 +12717,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||90';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|90';
 INSERT INTO dtl_cw
@@ -11815,7 +12987,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -11824,17 +12996,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|90';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|90';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|90';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|90';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12157,6 +13367,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||95';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|95';
 INSERT INTO dtl_cw
@@ -12398,7 +13637,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -12407,17 +13646,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|95';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|95';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|95';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|95';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;
@@ -12740,6 +14017,35 @@ DROP TABLE IF EXISTS _c_pre_temp; DROP TABLE IF EXISTS _c_post_temp;
 DROP TABLE IF EXISTS _c_d_tic; DROP TABLE IF EXISTS _c_pre_tic;
 DROP TABLE IF EXISTS _c_post_tic; DROP TABLE IF EXISTS _c_d_opii;
 DROP TABLE IF EXISTS _c_pre_opii; DROP TABLE IF EXISTS _c_post_opii;
+
+CREATE OR REPLACE TEMP TABLE _fi_codes AS SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM _ins_cinv UNION ALL SELECT application_code FROM _del_cinv
+  UNION ALL SELECT application_code FROM _ins_inv UNION ALL SELECT application_code FROM _del_inv) u;
+CREATE OR REPLACE TEMP TABLE _fi_wf AS SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM _ins_task UNION ALL SELECT proc_inst_id FROM _del_task
+  UNION ALL SELECT t.proc_inst_id FROM s000_cqrs_cfs.cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM _ins_route UNION ALL SELECT route_id FROM _del_route)) u;
+CREATE OR REPLACE TEMP TABLE _fi_oa AS SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM _ins_app UNION ALL SELECT operator_application_id FROM _del_app
+  UNION ALL SELECT operator_application_id FROM _ins_inst UNION ALL SELECT operator_application_id FROM _del_inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM _ins_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender'
+      UNION ALL SELECT 1 FROM _del_msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='cfs.html.label.role.operatorInvoiceSender')) u;
+CREATE OR REPLACE TEMP TABLE _fi_ids AS SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM s000_cqrs_cfs.cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM _ins_inst
+  UNION ALL SELECT application_inst_id FROM _del_inst) u;
+DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM approval_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM send_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type FROM countersign_temp_cw WHERE id IN (SELECT id FROM _fi_ids);
+DROP TABLE IF EXISTS _fi_codes;
+DROP TABLE IF EXISTS _fi_wf;
+DROP TABLE IF EXISTS _fi_oa;
+DROP TABLE IF EXISTS _fi_ids;
 SELECT '@@JOB5@@|E|insertion_only|maintain|crown||100';
 SELECT '@@JOB5@@|B|insertion_only|query|crown|q1|100';
 INSERT INTO dtl_cw
@@ -12981,7 +14287,7 @@ SELECT
 FROM dtl_cw t
 INNER JOIN (
     SELECT fact_t.id
-    FROM fact_t_cw AS fact_t
+    FROM crown_fact_ids AS fact_t
     LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
     WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
 ) scp ON t.id = scp.id
@@ -12990,17 +14296,55 @@ GROUP BY t.head_id, t.logical_is_deleted
 SELECT '@@JOB5@@|E|insertion_only|query|crown|q3|100';
 SELECT '@@JOB5@@|B|insertion_only|count|crown|q3|100';
 SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM dtl_cw t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM s000_cqrs_cfs.cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE oa.flag_opii AND (oa.status = 30 OR (oa.status = 40 AND oa.flag_temp) OR (oa.status = 50 AND oa.flag_tic))
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= (SELECT job_last_start_date - INTERVAL 30 MINUTE FROM s000_dwt_hws_iao.dwd_job_status_t_05 LIMIT 1)
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;
+SELECT
+    t.head_id || CAST(t.logical_is_deleted AS VARCHAR) AS head_id,
+    MAX(t.period_id), MAX(t.period_id_dd), MAX(t.period_id_qty),
+    MAX(t.bill_type), MAX(t.business_type), MAX(t.node_type),
+    MAX(t.invoice_category), MAX(t.invoice_type_name), MAX(t.company_code),
+    MAX(t.cfs_salesperson_code), MAX(t.cfs_salesperson_name),
+    MAX(t.cfs_region_id), MAX(t.cfs_region_code), MAX(t.cfs_region_en_name),
+    MAX(t.cfs_repoffice_code), MAX(t.cfs_repoffice_en_name),
+    MAX(t.region_code), MAX(t.region_cn_name), MAX(t.region_en_name),
+    MAX(t.repoffice_code), MAX(t.repoffice_cn_name), MAX(t.repoffice_en_name),
+    MAX(t.country_code), MAX(t.country_cn_name), MAX(t.country_en_name),
+    MAX(t.bg_code), MAX(t.bg_cn_name), MAX(t.bg_en_name),
+    MAX(t.customer_code), MAX(t.customer_name), MAX(t.customer_group_name),
+    SUBSTR(string_agg(t.contract_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.customer_pono, ','), 1, 1000),
+    SUBSTR(string_agg(t.hw_contract_bussource_code, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_number, ','), 1, 1000),
+    SUBSTR(string_agg(t.project_name, ','), 1, 1000),
+    MAX(t.invoice_id), MAX(t.invoice_no), MAX(t.operator_application_id),
+    MAX(t.milestone_name), MAX(t.currency_code),
+    SUM(t.usd_total_amount), SUM(t.rmb_total_amount), SUM(t.total_amount),
+    MAX(t.creation_date), MAX(t.submit_date), MAX(t.applicant_time),
+    SUM(t.con_mi_qty),
+    CAST(NULL AS BIGINT) AS over_due_days,
+    MAX(t.current_handler_code), MAX(t.current_handler_name),
+    MAX(t.currentrole), MAX(t.todo_billing_id),
+    MAX(t.source_code), MAX(t.details_flag),
+    SUBSTR(string_agg(t.billing_status, ','), 1, 1000),
+    MAX(t.rtd_last_update_date), t.logical_is_deleted,
+    MAX(t.src_cdc_event_date), MAX(t.src_cdc_last_update_date),
+    MAX(t._hoodie_event_time),
+    SUBSTR(string_agg(t.frame_contract_no, ','), 1, 1000),
+    MAX(t.reason_code), MAX(t.sub_reason_code),
+    MAX(t.remarks), MAX(t.responsible_person),
+    MAX(t.estimated_resolution_time), MAX(t.cfs_status),
+    MAX(t.sla), MAX(t.reason_cn_name), MAX(t.reason_en_name),
+    MAX(t.sub_reason_cn_name), MAX(t.sub_reason_en_name),
+    MAX(t.responsible_person_id), MAX(t.responsible_person_code),
+    MAX(t.tax_invoice_date),
+    SUBSTR(string_agg(DISTINCT t.payment_unit_number, ',' ORDER BY t.payment_unit_number), 1, 1000) AS payment_unit_number
+FROM dtl_cw t
+INNER JOIN (
+    SELECT fact_t.id
+    FROM crown_fact_ids AS fact_t
+    LEFT JOIN s000_dwt_hws_iao.dwd_job_status_t_05 f ON (1 = 1)
+    WHERE fact_t.cdc_last_update_date >= f.job_last_start_date - INTERVAL 30 MINUTE
+) scp ON t.id = scp.id
+GROUP BY t.head_id, t.logical_is_deleted
+) AS q;
 SELECT '@@JOB5@@|E|insertion_only|count|crown|q3|100';
 SELECT '@@JOB5@@|B|insertion_only|minmax|crown|q3|100';
 SELECT MIN(head_id), MAX(head_id), MIN(total_amount), MAX(total_amount) FROM sum_cw;

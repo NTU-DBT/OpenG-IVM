@@ -270,6 +270,8 @@ def build_view_insert(schema, qname, dtl, sm, suffix):
     sql = rebind(read_sql(f"sql/opengauss/query/{qname}_count.sql"), schema)
     for v in MV_NAMES:
         sql = sql.replace(v, v.replace("_mv", suffix))
+    if suffix == "_cw" and qname == "q3":
+        sql = crown_maintain.crown_q3_rebind(sql)  # scope reads crown_fact_ids
     return qsp(schema) + _fixup_insert(sql, schema, qname, dtl, sm)
 
 
@@ -300,7 +302,7 @@ def build_ivm_maintain(schema, step_start, insert_tag, del_start=None, del_tag=N
 def count_form_sql(schema, method, qname, dtl, sm):
     """Count FORM of query qname. crown computes q1/q2/q3 by aggregating partial
     counts (no full join); others count their view/table result directly."""
-    if method == "crown" and qname in ("q1", "q2", "q3"):
+    if method == "crown" and qname in ("q1", "q2"):
         return qsp(schema) + crown_maintain.crown_count_sql("opengauss", qname, dtl)
     if method == "recompute":
         sql = read_sql(f"sql/opengauss/recompute/{qname}_count.sql")
@@ -310,6 +312,8 @@ def count_form_sql(schema, method, qname, dtl, sm):
         if suffix != "_mv":
             for v in MV_NAMES:
                 sql = sql.replace(v, v.replace("_mv", suffix))
+        if method == "crown" and qname == "q3":
+            sql = crown_maintain.crown_q3_rebind(sql)  # scope reads crown_fact_ids
     sql = rebind(sql, schema)
     sql = sql.replace(f"{schema}.dwd_billing_in_transit_dtl_t_05", f"{schema}.{dtl}")
     sql = sql.replace(f"{schema}.dwd_billing_in_transit_t_05", f"{schema}.{sm}")
@@ -405,6 +409,8 @@ def run_scenario(scenario):
     emit(0, "init_index", "crown", "", ix)
     lv_text = read_sql("sql/opengauss/logical_views/init.sql")
     gsql(sp(schema) + crown_maintain.opengauss_assembly_views_sql(lv_text, schema), "crown/views")
+    ms, _ = gsql_timed(sp(schema) + crown_maintain.fact_ids_init_sql(), "crown/fact_ids")
+    emit(0, "init_index", "crown", "", ms)
     say("init done")
 
     if scenario == "preloaded_replacement_sliding":
@@ -458,7 +464,8 @@ def run_scenario(scenario):
                 if step_idx == 0 and scenario != "preloaded_replacement_sliding":
                     ms, _ = gsql_timed(analyze_sql(schema, MV_NAMES), "analyze/mv"); emit(step_pct, "analyze", "ivm", "", ms)
             elif method == "crown":
-                ms, _ = gsql_timed(sp(schema) + crown_maintain.opengauss_maintain_sql(), "crown/maintain")
+                ms, _ = gsql_timed(sp(schema) + crown_maintain.opengauss_maintain_sql()
+                                   + "\n" + crown_maintain.fact_ids_maintain_sql("opengauss"), "crown/maintain")
                 emit(step_pct, "maintain", "crown", "", ms)
                 if step_idx == 0 and scenario != "preloaded_replacement_sliding":
                     ms, _ = gsql_timed(analyze_sql(schema, CROWN_TABLES), "analyze/crown"); emit(step_pct, "analyze", "crown", "", ms)

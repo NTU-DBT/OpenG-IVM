@@ -136,6 +136,8 @@ def gen_opengauss(scale, scenarios, methods, out_dir, schema_prefix):
                     lv_text = R.read_sql("sql/opengauss/logical_views/init.sql")
                     _region(f, scenario, "init_views", method, "", 0,
                             R.sp(schema) + crown_maintain.opengauss_assembly_views_sql(lv_text, schema))
+                    _region(f, scenario, "init_index", method, "", 0,
+                            R.sp(schema) + crown_maintain.fact_ids_init_sql())
                 # one post-init ANALYZE of all relevant tables in this schema
                 an_tables = [t.table for _, t in sorted(R.static_tables().items())]
                 if scenario == "preloaded_replacement_sliding":
@@ -166,7 +168,8 @@ def gen_opengauss(scale, scenarios, methods, out_dir, schema_prefix):
                                                      p["del_tag"] if p["do_delete"] else None))
                     elif method == "crown":
                         _region(f, scenario, "maintain", method, "", sp_,
-                                R.sp(schema) + crown_maintain.opengauss_maintain_sql())
+                                R.sp(schema) + crown_maintain.opengauss_maintain_sql()
+                                + "\n" + crown_maintain.fact_ids_maintain_sql("opengauss"))
                     for q in QUERIES:
                         tbl = dtl if q in ("q1", "q2") else sm
                         _region(f, scenario, "query", method, q, sp_, R.build_query(schema, method, q, dtl, sm))

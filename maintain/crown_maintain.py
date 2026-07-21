@@ -31,7 +31,7 @@ MV_NAMES = ["tmp_zx_send_countersign_t_mv", "apt_mv",
 
 CROWN_TABLES = ["crown_src_ccci", "crown_src_cici", "crown_agg_apt",
                 "crown_agg_temp", "crown_vp_tic", "crown_vp_opii",
-                "crown_vs_oa", "crown_mes"]
+                "crown_vs_oa", "crown_mes", "crown_fact_ids"]
 
 OA_COLS = ("operator_application_id, application_code, salesperson_id, company_id, "
            "customer_id, currency_id, total_amount, creation_date, applicant_time, "
@@ -52,6 +52,81 @@ UNORDERED_AGG_COLS = {"contract_number", "customer_pono",
 
 def _oa_cols(prefix="oa."):
     return ", ".join(prefix + c.strip() for c in OA_COLS.split(","))
+
+
+# ==========================================================================
+# crown_fact_ids: the id column of fact_t_cw, materialized and maintained
+# ==========================================================================
+#
+# Q3's scope needs only fact_t.id (+ cdc for the watermark), but as a *bag*:
+# fact_t is a UNION ALL of three branch views and its id fan-out (n:m tic in
+# countersign, 1:n task in approval) is real, so the scope join multiplicity
+# must be preserved to match ivm/recompute. We therefore materialize just the
+# id projection `crown_fact_ids(id, cdc_last_update_date, node_type)` — never
+# the full 35-column fact_t_cw — and maintain it with three per-branch rules:
+# each step we recompute the id rows of the branches for the affected keys and
+# delete+reinsert them. The branch views are the crown assembly views, so
+# re-deriving only the affected ids is delta-bounded.
+
+FACT_ID_BRANCHES = ["approval_temp_cw", "send_temp_cw", "countersign_temp_cw"]
+
+
+def fact_ids_init_sql():
+    """Initial population = id projection of the three branch views (not
+    fact_t_cw itself)."""
+    return "CREATE TABLE crown_fact_ids AS\n" + "\nUNION ALL ".join(
+        f"SELECT id, cdc_last_update_date, node_type FROM {v}" for v in FACT_ID_BRANCHES) + ";"
+
+
+def fact_ids_maintain_sql(dialect):
+    """Three-rule incremental maintenance of crown_fact_ids. Run after the
+    crown state maintenance (so the branch views reflect the new state); reads
+    this step's staged deltas."""
+    dd = dialect == "duckdb"
+    ins = "_ins_" if dd else "mlog_ins_"
+    dl = "_del_" if dd else "mlog_del_"
+    pc = "s000_cqrs_cfs." if dd else ""
+
+    def mk(name, body):
+        if dd:
+            return f"CREATE OR REPLACE TEMP TABLE {name} AS {body};"
+        return f"DROP TABLE IF EXISTS {name};\nCREATE TEMP TABLE {name} AS {body};"
+
+    p = []
+    w = p.append
+    # application_codes touched this step (affect tic / temp membership)
+    w(mk("_fi_codes", f"""SELECT DISTINCT application_code FROM (
+  SELECT application_code FROM {ins}cinv UNION ALL SELECT application_code FROM {dl}cinv
+  UNION ALL SELECT application_code FROM {ins}inv UNION ALL SELECT application_code FROM {dl}inv) u"""))
+    # work-flow proc_inst_ids touched this step (affect approval task fan-out)
+    w(mk("_fi_wf", f"""SELECT DISTINCT proc_inst_id FROM (
+  SELECT proc_inst_id FROM {ins}task UNION ALL SELECT proc_inst_id FROM {dl}task
+  UNION ALL SELECT t.proc_inst_id FROM {pc}cfs_proc_task_t t
+    WHERE t.route_id IN (SELECT route_id FROM {ins}route UNION ALL SELECT route_id FROM {dl}route)) u"""))
+    # affected oa: changed directly, or via code (tic/temp), work_flow (task),
+    # or a change to the mes singleton (which scales the send fan-out)
+    w(mk("_fi_oa", f"""SELECT DISTINCT operator_application_id FROM (
+  SELECT operator_application_id FROM {ins}app UNION ALL SELECT operator_application_id FROM {dl}app
+  UNION ALL SELECT operator_application_id FROM {ins}inst UNION ALL SELECT operator_application_id FROM {dl}inst
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE application_code IN (SELECT application_code FROM _fi_codes)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE work_flow_id IN (SELECT proc_inst_id FROM _fi_wf)
+  UNION ALL SELECT operator_application_id FROM crown_vs_oa WHERE status = 40 AND EXISTS (
+      SELECT 1 FROM {ins}msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='{MSG_KEY}'
+      UNION ALL SELECT 1 FROM {dl}msg WHERE app_name='cfs' AND language='zh_CN' AND message_key='{MSG_KEY}')) u"""))
+    # affected fact ids = application_inst_ids of affected oa's, plus changed opii
+    w(mk("_fi_ids", f"""SELECT DISTINCT id FROM (
+  SELECT application_inst_id AS id FROM {pc}cfs_opt_application_inst_t
+    WHERE operator_application_id IN (SELECT operator_application_id FROM _fi_oa)
+  UNION ALL SELECT application_inst_id FROM {ins}inst
+  UNION ALL SELECT application_inst_id FROM {dl}inst) u"""))
+    # three rules: drop the affected ids, then re-derive them per branch view
+    w("DELETE FROM crown_fact_ids WHERE id IN (SELECT id FROM _fi_ids);")
+    for v in FACT_ID_BRANCHES:
+        w(f"INSERT INTO crown_fact_ids SELECT id, cdc_last_update_date, node_type"
+          f" FROM {v} WHERE id IN (SELECT id FROM _fi_ids);")
+    for t in ("_fi_codes", "_fi_wf", "_fi_oa", "_fi_ids"):
+        w(f"DROP TABLE IF EXISTS {t};")
+    return "\n".join(p)
 
 
 # ==========================================================================
@@ -142,21 +217,16 @@ WHERE {alive}
      OR (fact_t.node_type = '待签返' AND NOT EXISTS ({branch(50, ' AND oa.flag_tic')}))
 ) q;"""
 
-    if qname == "q3":
-        return f"""SELECT COUNT(*) AS cnt FROM (
-  SELECT t.head_id, t.logical_is_deleted
-  FROM {dtl} t
-  INNER JOIN (
-    SELECT DISTINCT opii.application_inst_id AS id
-    FROM {pc}cfs_opt_application_inst_t opii
-    JOIN crown_vs_oa oa ON oa.operator_application_id = opii.operator_application_id
-    WHERE {alive}
-      AND GREATEST(oa.cdc_last_update_date, opii.cdc_last_update_date) >= {wm}
-  ) scp ON t.id = scp.id
-  GROUP BY t.head_id, t.logical_is_deleted
-) q;"""
-
+    # q3 is not handled here: it routes through the generic q3 builder with
+    # its fact scope table (fact_t_cw) replaced by the maintained crown_fact_ids.
     raise ValueError(qname)
+
+
+def crown_q3_rebind(sql):
+    """Point the generic q3 scope at the maintained id table instead of
+    assembling fact_t_cw (used for both the accumulate build and the count
+    form of crown's q3)."""
+    return sql.replace("fact_t_cw", "crown_fact_ids")
 
 
 def _crown_view_rebind(sql, base_ref):
