@@ -1,0 +1,16 @@
+scenario,method,maint_cpu_s,query_cpu_s,total_cpu_s,state_rss_mb,peak_rss_mb,wall_s,state_rows
+insertion_only,base_only,0.0,0.0,184.33,6492.0,6507.5,121.79,0
+insertion_only,recompute,0.0,137.77,327.47,8262.8,8715.2,171.49,0
+insertion_only,logical_views,0.0,100.88,289.04,8181.8,8181.2,159.25,0
+insertion_only,ivm,39.95,83.84,312.81,8532.5,8548.4,186.1,2456129
+insertion_only,crown,11.79,152.84,352.24,7416.3,7801.6,177.12,1112888
+sliding_window,base_only,0.0,0.0,323.51,6541.1,6586.8,208.73,0
+sliding_window,recompute,0.0,29.23,352.33,6744.4,6789.9,218.57,0
+sliding_window,logical_views,0.0,24.17,347.12,6687.2,6671.0,217.97,0
+sliding_window,ivm,14.39,7.19,345.08,6632.5,6714.4,220.85,121447
+sliding_window,crown,14.79,17.5,355.65,6644.7,6803.8,224.12,129143
+preloaded_replacement_sliding,base_only,0.0,0.0,503.97,11769.0,11839.3,219.6,0
+preloaded_replacement_sliding,recompute,0.0,421.82,936.12,14054.0,17639.9,368.73,0
+preloaded_replacement_sliding,logical_views,0.0,285.76,800.96,13818.7,17602.4,337.16,0
+preloaded_replacement_sliding,ivm,66.96,267.31,859.52,14570.4,17951.2,381.59,2451823
+preloaded_replacement_sliding,crown,19.84,481.38,1025.04,15146.2,17383.8,402.63,1112850

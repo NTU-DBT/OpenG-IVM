@@ -10,5 +10,3 @@ __pycache__/
 *.pyc
 *.duckdb
 .env
-
-/overhead/results/
